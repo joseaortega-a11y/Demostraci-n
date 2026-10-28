@@ -144,6 +144,13 @@ h1 span{box-shadow:none;background:linear-gradient(#ffc233,#ffc233) 0 92%/0% .2e
  .sedes{gap:20px}
 }
 @media(min-width:1500px){.hero,.wrap{max-width:1480px}.top{padding-inline:max(5%,calc((100% - 1480px)/2))}.tabs{padding-inline:max(4%,calc((100% - 1480px)/2))}}
+
+/* Barras superiores en móvil: altura fija para que las pestañas no se solapen */
+.top{height:61px;box-sizing:border-box;flex-wrap:nowrap}
+.brand{white-space:nowrap;min-width:0;font-size:1.3rem}
+.chip{white-space:nowrap;flex:0 0 auto;font-size:.85rem;padding:7px 12px}
+.tabs{scrollbar-width:none}.tabs::-webkit-scrollbar{display:none}
+@media(max-width:520px){.top{gap:10px}.brand{gap:8px;font-size:1.15rem}.brand img{width:34px;height:34px}.chip .cb{display:none}}
 </style>
 </head>
 <body>
@@ -256,7 +263,7 @@ function render(){
   bar();
 }
 function bar(){
-  $('#sedeBtn').textContent=sede?'Sede '+S().n+' · cambiar':'Elegir sede';
+  $('#sedeBtn').innerHTML=sede?'Sede '+S().n+'<span class="cb"> · cambiar</span>':'Elegir sede';
   $('#bar').hidden=!cart.length;$('#barN').textContent='Ver pedido · '+count()+(count()===1?' producto':' productos');$('#barT').textContent=fmt(total());keep();
 }
 function addLine(n,x,u){
