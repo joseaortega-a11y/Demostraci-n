@@ -359,6 +359,27 @@ dialog{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
 .toast{width:max-content}
 .qo .pp{display:block;margin-top:2px}
 .cnote{margin:0 0 10px;padding:10px 14px;border-radius:12px;background:#fff1c9;color:#7a1710;font-weight:600;font-size:.9rem}
+
+/* Pastilla de categorías que se desliza */
+.tabs{position:sticky}
+.tabs a{position:relative;z-index:1}
+.tabind{position:absolute;left:0;top:0;z-index:0;border-radius:999px;background:var(--o);opacity:0;pointer-events:none;
+  transition:transform 300ms cubic-bezier(.77,0,.175,1),width 300ms cubic-bezier(.77,0,.175,1),opacity 150ms ease}
+.tabind.on{opacity:1}
+.tabs a[aria-current=true]{background:transparent;border-color:transparent;color:var(--ons)}
+.tabs:not(:has(.tabind.on)) a[aria-current=true]{background:var(--o);border-color:var(--o)}
+/* Barra de "Procesando pedido…" en el botón de envío */
+.btn.sending{position:relative;overflow:hidden;pointer-events:none}
+.btn .prog{position:absolute;inset:0;background:rgba(255,255,255,.3);transform:scaleX(0);transform-origin:left center;transition:transform 850ms linear}
+.btn.go .prog{transform:scaleX(1)}
+.btn .lbl{position:relative}
+.btn.sending{transition:background-color 200ms ease,border-color 200ms ease}
+.btn.done{background:#1f8a4c;border-color:#1f8a4c}
+.btn.done .prog{opacity:0;transition:opacity 200ms ease}
+@media(prefers-reduced-motion:reduce){.tabind{transition:opacity 150ms ease}.btn .prog{transition:none}}
+/* La barra superior de cada ventana (título y ×) se queda fija al desplazarse */
+dialog .dh{position:sticky;top:0;z-index:5;background:var(--s);padding-bottom:12px;box-shadow:0 1px 0 transparent;transition:box-shadow 150ms ease}
+dialog.scrolled .dh{box-shadow:0 1px 0 var(--l),0 6px 12px -8px rgba(0,0,0,.18)}
 </style>
 </head>
 <body>
@@ -585,7 +606,7 @@ function card(it){
 function renderMenu(){
   /* Con sede elegida solo se muestran sus productos y promociones; las categorías vacías se ocultan */
   const cats=MENU.map(c=>({c,items:c.items.filter(avail)})).filter(x=>x.items.length);
-  $('#tabs').innerHTML=cats.map(({c})=>`<a href="#c-${c.id}">${c.t}</a>`).join('');
+  $('#tabs').innerHTML='<span class="tabind" aria-hidden="true"></span>'+cats.map(({c})=>`<a href="#c-${c.id}">${c.t}</a>`).join('');
   $('#menuRoot').innerHTML=cats.map(({c,items})=>`<section class="cat" id="c-${c.id}"><h2>${c.t}</h2>${c.id==='promos'&&sede?`<p class="nota">Promociones de ${S().n}.</p>`:c.nota?`<p class="nota">${c.nota}</p>`:''}<div class="grid">${items.map(card).join('')}</div></section>`).join('');
   $('#stP').textContent=cats.filter(({c})=>!['promos','adiciones'].includes(c.id)).reduce((a,x)=>a+x.items.length,0);
   obs();
@@ -678,7 +699,7 @@ document.addEventListener('click',e=>{
   if(t.closest('[data-close]'))return t.closest('dialog').close();
   const oq=t.closest('[data-oq]');
   if(oq){const g=+oq.dataset.g,i=+oq.dataset.i,v=Math.max(0,Math.min(9,cur.q[g][i]+ +oq.dataset.oq));cur.q[g][i]=v;$('#oq'+g+'-'+i).textContent=v;oq.parentNode.firstElementChild.disabled=!v;optTotal();return}
-  const tb=t.closest('#tabs a');if(tb){$$('#tabs a').forEach(x=>x.setAttribute('aria-current',x===tb))}
+  const tb=t.closest('#tabs a');if(tb){tabLock=Date.now()+1000;$$('#tabs a').forEach(x=>x.setAttribute('aria-current',x===tb));moveInd(tb)}
   const a=t.closest('.add');if(a){const it=ITEMS[a.dataset.id];return it&&tryAdd(it)}
   const s=t.closest('[data-s]');if(s){$('#dSede').close();setSede(s.dataset.s);if(wait){const f=wait;wait=null;f()}return}
   if(t.closest('#sedeBtn')||t.closest('#chgSede'))return $('#dSede').showModal();
@@ -730,7 +751,7 @@ const fail=(m,el)=>{$$('#fCart .bad').forEach(x=>x.classList.remove('bad'));if(e
 $('#fCart').addEventListener('input',e=>e.target.classList.remove('bad'));
 $('#fCart').addEventListener('change',e=>e.target.classList.remove('bad'));
 $('#fCart').addEventListener('submit',e=>{
-  e.preventDefault();const d=new FormData(e.target),dom=d.get('ent')==='dom',F=e.target.elements,s=S();
+  e.preventDefault();if(sending)return;const d=new FormData(e.target),dom=d.get('ent')==='dom',F=e.target.elements,s=S();
   if(!s){$('#err').textContent='Primero elige tu sede.';$('#dSede').showModal();return}
   if(!cart.length){$('#err').textContent='Tu pedido está vacío. Agrega un producto de la carta.';return}
   const bad=cart.find(l=>l.item&&ITEMS[l.item]&&(!avail(ITEMS[l.item])||!dayOk(ITEMS[l.item])));
@@ -750,11 +771,28 @@ $('#fCart').addEventListener('submit',e=>{
     '*Cliente*','Nombre: '+nm,dom&&String(d.get('dir')).trim()?'Dirección: '+String(d.get('dir')).trim():null,dom&&rf?'Barrio y referencias: '+rf:null,dom&&loc?'Ubicación: '+loc:null,gn?'Notas generales: '+gn:null,'',
     '*Pago:* '+pagoTxt,'','Acepto la política de tratamiento de datos personales de La Troncal.'].filter(x=>x!==null);
   const msg=L.join('\n'),url='https://wa.me/'+s.wa+'?text='+encodeURIComponent(msg);
-  window.lastMsg=msg;$('#waLink').href=url;$('#fallback').hidden=false;
-  const w=window.open(url,'_blank');if(!w&&window.self===window.top)location.href=url;
-  inDlg($('#fallback'));
-  $('#paidBox').hidden=!tr;if(tr)$('#paidBtn').href='https://wa.me/'+s.wa+'?text='+encodeURIComponent('✅ Ya pagué el pedido '+code+' por transferencia.\nNombre: '+nm+'\nValor: '+fmt(total())+'\nAdjunto el comprobante.');
+  window.lastMsg=msg;$('#waLink').href=url;
+  const paid='https://wa.me/'+s.wa+'?text='+encodeURIComponent('✅ Ya pagué el pedido '+code+' por transferencia.\nNombre: '+nm+'\nValor: '+fmt(total())+'\nAdjunto el comprobante.');
+  processing(()=>{
+    const w=window.open(url,'_blank');if(!w&&window.self===window.top)location.href=url;
+    $('#fallback').hidden=false;$('#paidBox').hidden=!tr;if(tr)$('#paidBtn').href=paid;inDlg($('#fallback'));
+  });
 });
+/* Botón de envío: se llena como barra de carga y luego abre WhatsApp.
+   Dura menos de 1 s para que el navegador siga permitiendo abrir WhatsApp. */
+let sending=false;
+function processing(done){
+  const b=$('#fCart button[type=submit]'),rm=matchMedia('(prefers-reduced-motion: reduce)').matches,ms=rm?250:850;
+  sending=true;b.setAttribute('aria-busy','true');b.classList.remove('done');b.classList.add('sending');
+  b.innerHTML='<span class="prog" aria-hidden="true"></span><span class="lbl">Procesando pedido…</span>';
+  $('#live').textContent='Procesando pedido';
+  b.offsetWidth;b.classList.add('go');
+  setTimeout(()=>{
+    b.classList.add('done');b.querySelector('.lbl').textContent='¡Listo! Abriendo WhatsApp';
+    done();
+    setTimeout(()=>{b.classList.remove('sending','go','done');b.removeAttribute('aria-busy');b.textContent='Enviar pedido por WhatsApp';sending=false},2600);
+  },ms);
+}
 (()=>{const d=$('input[name=dir]');d.addEventListener('blur',()=>{const e=$('input[name=ent]:checked');if(false)$('#err').textContent=''});d.addEventListener('input',()=>{$('#err').textContent=''})})();
 /* Envío de formularios sin depender del submit nativo (algunos visores en iframe lo bloquean) */
 const sendForm=f=>f.dispatchEvent(new Event('submit',{cancelable:true,bubbles:true}));
@@ -766,10 +804,16 @@ const DLG=$$('dialog');
 const syncLock=()=>document.documentElement.classList.toggle('lock',DLG.some(d=>d.open));
 new MutationObserver(syncLock).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
 document.addEventListener('touchmove',e=>{if(!document.documentElement.classList.contains('lock'))return;const dl=e.target.closest&&e.target.closest('dialog');if(!dl||dl.scrollHeight<=dl.clientHeight)e.preventDefault()},{passive:false});
+DLG.forEach(d=>d.addEventListener('scroll',()=>d.classList.toggle('scrolled',d.scrollTop>4),{passive:true}));
 DLG.forEach(d=>d.addEventListener('click',e=>{if(e.target!==d||(d.id==='dSede'&&!sede))return;const r=d.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)d.close()}));
 
 /* ===== Inicio ===== */
-const io=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting){const T=$('#tabs');$$('#tabs a').forEach(a=>{const on=a.hash==='#'+en.target.id;a.setAttribute('aria-current',on);if(on){const l=a.offsetLeft-(T.clientWidth-a.offsetWidth)/2;T.scrollTo({left:Math.max(0,l),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'})}})}}),{rootMargin:'-35% 0px -60% 0px'});
+/* Mueve la pastilla amarilla hasta la pestaña activa */
+function moveInd(a,anim=true){const i=$('#tabs .tabind');if(!i||!a)return;if(!anim)i.style.transition='none';
+  i.style.width=a.offsetWidth+'px';i.style.height=a.offsetHeight+'px';i.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`;i.classList.add('on');
+  if(!anim){i.offsetWidth;i.style.transition=''}}
+let tabLock=0;
+const io=new IntersectionObserver(es=>es.forEach(en=>{if(en.isIntersecting&&Date.now()>tabLock){const T=$('#tabs');$$('#tabs a').forEach(a=>{const on=a.hash==='#'+en.target.id;a.setAttribute('aria-current',on);if(on){moveInd(a);const l=a.offsetLeft-(T.clientWidth-a.offsetWidth)/2;T.scrollTo({left:Math.max(0,l),behavior:matchMedia('(prefers-reduced-motion:reduce)').matches?'auto':'smooth'})}})}}),{rootMargin:'-35% 0px -60% 0px'});
 function obs(){io.disconnect();$$('.cat').forEach(c=>io.observe(c))}
 $('#stS').textContent=SEDES.length;
 renderMenu();renderSedes();bar();
