@@ -776,7 +776,9 @@ renderMenu();renderSedes();bar();
 /* Lo primero en cada visita: elegir la sede (la última usada queda marcada) */
 const openSedeFirst=()=>{try{$('#tSede').textContent=sede?'¿Pides en la misma sede?':'¿Dónde quieres pedir?';if(!$('#dSede').open)$('#dSede').showModal()}catch(e){location.hash='sedes'}};
 $('#dSede').addEventListener('close',()=>{$('#tSede').textContent='¿Dónde quieres pedir?'});
-requestAnimationFrame(openSedeFirst);
+openSedeFirst();
+/* Si la página cargó en una pestaña oculta, vuelve a comprobarlo al mostrarse */
+let asked=true;document.addEventListener('visibilitychange',()=>{if(!document.hidden&&!sede&&!$('#dSede').open)openSedeFirst()});
 setInterval(()=>{if(!document.hidden)renderSedes()},60000);
 const rv=new IntersectionObserver(es=>es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in');rv.unobserve(e.target);setTimeout(()=>{e.target.style.transitionDelay='0ms'},900)}}),{threshold:.15});
 $$('.item,.sede').forEach((el,i)=>{el.classList.add('rv');el.style.transitionDelay=(i%4)*60+'ms';rv.observe(el)});
