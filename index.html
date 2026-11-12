@@ -1291,10 +1291,15 @@ new ResizeObserver(setHH).observe($('.top'));
 
 /* En el celular, el encabezado se esconde al bajar por la carta y vuelve al subir */
 const mob=matchMedia('(max-width: 759px)');let lastY=scrollY;
+/* Se esconde al bajar; solo vuelve si subes de verdad (más de ~180 px seguidos) o si sales de la carta */
+let upAcc=0;
 addEventListener('scroll',()=>{
-  const y=scrollY,dy=y-lastY;if(Math.abs(dy)<6)return;lastY=y;
-  const T=$('#tabs'),stuck=view==='inicio'&&T&&T.getBoundingClientRect().top<=($('.top').offsetHeight+2)&&y>200;
-  document.documentElement.classList.toggle('hdr-off',mob.matches&&dy>0&&stuck&&!document.documentElement.classList.contains('lock'));
+  const y=scrollY,dy=y-lastY;if(Math.abs(dy)<4)return;lastY=y;
+  const R=document.documentElement;if(R.classList.contains('lock'))return;
+  const T=$('#tabs'),hh=$('.top').offsetHeight,inMenu=view==='inicio'&&T&&y>200&&$('#menu').getBoundingClientRect().top<hh+60;
+  if(!mob.matches||!inMenu){upAcc=0;R.classList.remove('hdr-off');return}
+  if(dy>0){upAcc=0;R.classList.add('hdr-off')}
+  else{upAcc-=dy;if(upAcc>180)R.classList.remove('hdr-off')}
 },{passive:true});
 addEventListener('hashchange',()=>document.documentElement.classList.remove('hdr-off'));
 
