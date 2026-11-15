@@ -525,11 +525,15 @@ prueba('Envío completo: el mensaje de WhatsApp lleva todo el pedido', async () 
     '*Total: $32.000 + domicilio*', 'Nombre: Ana Pérez\n', 'Dirección: Calle 1 #2-3', 'Barrio y referencias: Barrio Centro',
     'Notas generales: Tocar el timbre', '*Pago:* Transferencia', 'Acepto la política de tratamiento de datos'
   ].forEach(s => contiene(m, s, 'Mensaje'));
-  ok(/Código: TB-\d{4} · /.test(m), 'Falta el código del pedido');
+  ok(/\nFecha: \S/.test(m), 'Falta la fecha del pedido');
+  noContiene(m, 'Código', 'El pedido ya no lleva código');
+  ok(!/TB-\d/.test(m), 'El pedido ya no lleva código');
   noContiene(m, 'sede cerrada');
   ok(!q(w, '#fallback').hidden, 'Deben verse las opciones por si WhatsApp no abrió');
   ok(!q(w, '#paidBox').hidden, 'Con transferencia debe verse "Enviar comprobante"');
-  contiene(decodeURIComponent(q(w, '#paidBtn').href), 'Ya pagué el pedido TB-');
+  const pagado = decodeURIComponent(q(w, '#paidBtn').href);
+  contiene(pagado, 'Ya pagué mi pedido por transferencia.\nNombre: Ana Pérez\nValor: $32.000');
+  ok(!/TB-\d/.test(pagado), 'El mensaje del comprobante tampoco lleva código');
   igual(q(w, '#waLink').href, w.__abierto);
   igual(w.__errores.length, 0, 'Errores de JavaScript');
 });
@@ -558,7 +562,10 @@ prueba('Al enviar el pedido se vacía el carrito y se muestra la confirmación',
   ok(q(w, '#dCart').open, 'La ventana sigue abierta con la confirmación');
   const body = q(w, '#cartBody').textContent;
   contiene(body, '¡Pedido enviado!');
-  contiene(body, m.match(/TB-\d{4}/)[0], 'Debe mostrar el código del pedido');
+  contiene(body, 'Ana, tu pedido va para Lorica Principal por WhatsApp.', 'Debe saludar por el nombre');
+  noContiene(body, 'TB-', 'La tarjeta ya no muestra código');
+  contiene(body, 'Haz la transferencia y envía la captura', 'Con transferencia, explica el comprobante');
+  contiene(body, 'el valor del domicilio', 'Con domicilio, explica que confirman el valor');
   ok(!q(w, '#fallback').hidden && !q(w, '#paidBox').hidden, 'Siguen los botones de respaldo y de comprobante');
   ok(!seVe(q(w, '#fCart [name=nom]')), 'El formulario se esconde');
   ok(!seVe(q(w, '#fCart button[type=submit]')), 'El botón de enviar se esconde');
@@ -578,6 +585,21 @@ prueba('Al enviar el pedido se vacía el carrito y se muestra la confirmación',
   w.__abierto = null; await enviar(w);
   contiene(mensaje(w), '1× Soda de fresa – $8.000');
   noContiene(mensaje(w), 'Perro Boss', 'El segundo pedido no debe traer lo del primero');
+});
+prueba('Tarjeta de confirmación al recoger en efectivo', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'express');
+  await agregar(w, 'Perro Boss'); abrirPedido(w);
+  llenar(w, { nom: 'María José Ruiz', recoger: true, pago: 'Efectivo' }); await enviar(w);
+  const body = q(w, '#cartBody').textContent;
+  contiene(body, 'María, tu pedido va para Lorica Express por WhatsApp.');
+  contiene(body, 'listo para recoger');
+  noContiene(body, 'transferencia'); noContiene(body, 'domicilio');
+});
+prueba('El nombre en la tarjeta no permite meter HTML', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w);
+  llenar(w, { nom: '<img/src=x/id=hack2>' }); await enviar(w);
+  ok(!q(w, '#hack2'), 'El HTML del nombre se ejecutó en la página');
 });
 prueba('Si recargan después de enviar, el carrito sigue vacío', async () => {
   let w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
@@ -628,6 +650,24 @@ prueba('Pestañas Carta, Nosotros y Sedes', async () => {
   cambiar('');
   igual(w.document.title, 'Carta | La Troncal');
   ok(!q(w, '#menu').hidden);
+});
+prueba('El logo lleva al inicio de la página', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  w.scrollTo({ top: 3000, behavior: 'instant' }); await esperar(100);
+  ok(w.scrollY > 1000, 'No se pudo bajar en la página');
+  /* Edge sin ventana no anima el scroll suave, así que se revisa a dónde pide ir */
+  const original = w.scrollTo.bind(w); let destino = null;
+  w.scrollTo = (...a) => { destino = typeof a[0] === 'object' ? a[0].top : a[1]; return original(...a); };
+  q(w, '.brand').click(); await esperar(300);
+  igual(destino, 0, 'Desde la carta debe subir al inicio');
+  igual(w.location.hash, '', 'No debe cambiar de vista');
+  w.scrollTo = original;
+  w.location.hash = 'sedes'; w.eval('route()');
+  w.scrollTo({ top: 400, behavior: 'instant' }); await esperar(100);
+  q(w, '.brand').click(); await esperar(300);
+  igual(w.document.title, 'Carta | La Troncal', 'Desde Sedes debe volver a la carta');
+  ok(!q(w, '#menu').hidden, 'Debe verse la carta');
+  igual(w.scrollY, 0, 'Y quedar arriba');
 });
 prueba('Tarjetas de sedes: WhatsApp, mapa, pagos y estado', async () => {
   const w = await abrir(); hora(w, ...ABIERTO); w.eval('renderSedes()');

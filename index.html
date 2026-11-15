@@ -655,10 +655,15 @@ footer .soc a{border-color:rgba(255,255,255,.3);color:#fff}
 @media(prefers-reduced-motion:reduce){.mascot *{animation:none!important}}
 /* Pedido enviado: se muestra la confirmación y se esconde el formulario */
 #fCart.enviado>:not(#cartBody):not(#fallback):not(#paidBox){display:none!important}
-.sent{text-align:center;padding:14px 8px 6px}
-.sent-ic{width:56px;height:56px;margin:0 auto 10px;border-radius:50%;display:grid;place-items:center;background:#1f7a45;color:#fff;font-size:1.7rem;font-weight:700}
-.sent h3{margin:0 0 6px;font:400 1.6rem var(--h);text-transform:uppercase}
-.sent p{margin:0 0 6px}
+.sent{text-align:center;padding:8px 0 4px}
+.sent-ic{width:56px;height:56px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:#1f7a45;color:#fff;font-size:1.7rem;font-weight:700}
+.sent h3{margin:0 0 8px;font:400 1.7rem/1.1 var(--h);text-transform:uppercase}
+.sent-lead{margin:0 auto 18px;max-width:28ch;font-size:1.05rem;line-height:1.45;text-wrap:balance}
+.sent-pasos{text-align:left;background:var(--s2);border-radius:16px;padding:14px 16px 14px;margin:0 0 12px}
+.sent-pasos>p{margin:0 0 8px;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--m)}
+.sent-pasos ol{margin:0;padding:0 0 0 1.25em;display:grid;gap:8px;font-size:.93rem;line-height:1.4}
+.sent-pasos li::marker{font-weight:700;color:var(--o)}
+.sent-pie{margin:0 0 14px;font-size:.85rem;color:var(--m)}
 </style>
 </head>
 <body>
@@ -1232,29 +1237,35 @@ $('#fCart').addEventListener('submit',e=>{
   if(dom&&d.get('pago')==='Datáfono'){payOpts();return fail('El datáfono solo está disponible si recoges el pedido en la sede. Elige otra forma de pago.',F.pago)}
   if(!F.acepto.checked)return fail('Para enviar el pedido, acepta la política de tratamiento de datos.',F.acepto);
   $$('#fCart .bad').forEach(x=>x.classList.remove('bad'));$('#err').textContent='';
-  const pago=d.get('pago'),tr=pago==='Transferencia',code='TB-'+(crypto.getRandomValues(new Uint32Array(1))[0]%9000+1000);
+  const pago=d.get('pago'),tr=pago==='Transferencia';
   const fh=new Date().toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',hour:'numeric',minute:'2-digit',hour12:true}).replace(/[  ]/g,' ');
   const nm=String(d.get('nom')).trim(),gn=String(d.get('nota')).trim(),rf=String(d.get('ref')).trim(),pr=l=>l.u==null?'precio por confirmar':fmt(l.u*l.q);
   const pagoTxt=tr?'Transferencia (envío la captura del comprobante a continuación)':pago==='Datáfono'?'Datáfono (tarjeta)':'Efectivo';
-  const L=['*PEDIDO LA TRONCAL – '+s.n.toUpperCase()+'*','*'+(dom?'DOMICILIO':'RECOGER EN LA SEDE')+'*','Código: '+code+' · '+fh,'','*Productos*',
+  const L=['*PEDIDO LA TRONCAL – '+s.n.toUpperCase()+'*','*'+(dom?'DOMICILIO':'RECOGER EN LA SEDE')+'*','Fecha: '+fh,'','*Productos*',
     ...(()=>{const TG=tags();return cart.filter(l=>!l.par).flatMap(p=>{const kids=cart.filter(c=>c.par===p.id);return [p.q+'× '+p.n+(TG[p.id]||'')+' – '+pr(p),p.opt?'   '+p.opt:null,kids.length?'   _Adiciones de '+p.n+(TG[p.id]||'')+':_':null,...kids.map(c=>'   + '+c.q+'× '+c.n+' – '+pr(c)),p.nt&&p.nt.trim()?'   Nota: '+p.nt.trim():null]})})(),'',
     'Subtotal: '+fmt(total())+(tbd()?' + productos por confirmar':''),dom?'Domicilio: por confirmar (según el barrio)':null,'*Total: '+fmt(total())+(tbd()?' + por confirmar':'')+(dom?' + domicilio':'')+'*','',
     '*Cliente*','Nombre: '+nm,dom&&String(d.get('dir')).trim()?'Dirección: '+String(d.get('dir')).trim():null,dom&&rf?'Barrio y referencias: '+rf:null,dom&&loc?'Ubicación: '+loc:null,gn?'Notas generales: '+gn:null,'',
     '*Pago:* '+pagoTxt,'',...(!stS.open?['⚠️ Envié el pedido con la sede cerrada; lo pueden atender cuando abra'+(stS.next?' ('+stS.next.txt+')':'')+'.','']:[]),'Acepto la política de tratamiento de datos personales de La Troncal.'].filter(x=>x!==null);
   const msg=L.join('\n'),url='https://wa.me/'+s.wa+'?text='+encodeURIComponent(msg);
   window.lastMsg=msg;$('#waLink').href=url;
-  const paid='https://wa.me/'+s.wa+'?text='+encodeURIComponent('✅ Ya pagué el pedido '+code+' por transferencia.\nNombre: '+nm+'\nValor: '+fmt(total())+'\nAdjunto el comprobante.');
+  const paid='https://wa.me/'+s.wa+'?text='+encodeURIComponent('✅ Ya pagué mi pedido por transferencia.\nNombre: '+nm+'\nValor: '+fmt(total())+'\nAdjunto el comprobante.');
   processing(()=>{
-    pedidoEnviado(code,s,tr);
+    pedidoEnviado(nm,s,tr,dom);
     const w=window.open(url,'_blank');if(!w&&window.self===window.top)location.href=url;
     $('#fallback').hidden=false;$('#paidBox').hidden=!tr;if(tr)$('#paidBtn').href=paid;inDlg($('#fallback'));
   });
 });
 /* Al enviar: se vacía el carrito y se muestra la confirmación (el mensaje queda en window.lastMsg para "Copiar pedido") */
-function pedidoEnviado(code,s,tr){
+function pedidoEnviado(nm,s,tr,dom){
   cart=[];notice='';bar();
   $('#fCart').classList.add('enviado');
-  $('#cartBody').innerHTML=`<div class="sent" role="status"><div class="sent-ic" aria-hidden="true">✓</div><h3>¡Pedido enviado!</h3><p>Tu pedido <b>${code}</b> va para <b>${esc(s.n)}</b> por WhatsApp.</p><p class="nota">${tr?'Cuando hagas la transferencia, envía el comprobante con el botón de abajo.':'La sede te confirmará el pedido por WhatsApp.'} Tu carrito quedó vacío para un nuevo pedido.</p></div>`;
+  const pasos=['Si WhatsApp te pide confirmar, toca <b>Enviar</b> en el chat.',
+    tr?'Haz la transferencia y envía la captura con <b>Enviar comprobante</b>.':null,
+    dom?'La sede te confirma el pedido y el valor del domicilio.':'La sede te avisa cuando tu pedido esté listo para recoger.'].filter(Boolean);
+  $('#cartBody').innerHTML=`<div class="sent" role="status"><div class="sent-ic" aria-hidden="true">✓</div><h3>¡Pedido enviado!</h3>`
+    +`<p class="sent-lead"><b>${esc(nm.split(/\s+/)[0])}</b>, tu pedido va para <b>${esc(s.n)}</b> por WhatsApp.</p>`
+    +`<div class="sent-pasos"><p>Qué sigue</p><ol>${pasos.map(p=>`<li>${p}</li>`).join('')}</ol></div>`
+    +`<p class="sent-pie">Tu carrito quedó vacío para un nuevo pedido.</p></div>`;
 }
 /* Botón de envío: se llena como barra de carga y luego abre WhatsApp.
    Dura menos de 1 s para que el navegador siga permitiendo abrir WhatsApp. */
@@ -1300,6 +1311,13 @@ function route(){
   }
 }
 addEventListener('hashchange',route);
+/* El logo siempre lleva al inicio de la página (también si ya estás en la carta) */
+$('.brand').addEventListener('click',e=>{
+  e.preventDefault();document.documentElement.classList.remove('hdr-off');
+  if(view!=='inicio'){location.hash='inicio';return}
+  if(location.hash&&location.hash!=='#inicio')history.replaceState(null,'','#inicio');
+  window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+});
 /* Altura real del encabezado, para que las categorías queden pegadas justo debajo */
 const setHH=()=>document.documentElement.style.setProperty('--hh',$('.top').offsetHeight+'px');
 new ResizeObserver(setHH).observe($('.top'));
