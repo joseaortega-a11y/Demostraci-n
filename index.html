@@ -664,6 +664,10 @@ footer .soc a{border-color:rgba(255,255,255,.3);color:#fff}
 .sent-pasos ol{margin:0;padding:0 0 0 1.25em;display:grid;gap:8px;font-size:.93rem;line-height:1.4}
 .sent-pasos li::marker{font-weight:700;color:var(--o)}
 .sent-pie{margin:0 0 14px;font-size:.85rem;color:var(--m)}
+/* Productos ganadores de festivales: borde dorado suave e insignia sobre el nombre */
+.item.premio:not(.incart){border-color:#e2b53e;box-shadow:0 0 0 1px rgba(226,181,62,.55),0 8px 20px -14px rgba(160,110,0,.5)}
+.premio-tag{display:inline-flex;width:fit-content;align-self:flex-start;align-items:center;gap:5px;margin:0 0 6px;padding:2px 10px 2px 8px;border-radius:999px;background:#fff3cf;border:1px solid #ecc865;color:#7a4f00;font-size:.72rem;font-weight:700;letter-spacing:.02em;line-height:1.5}
+.premio-tag svg{flex:0 0 auto}
 /* Confirmación de "Copiar pedido" */
 #copyBtn{min-width:9.5em;transition:background-color .2s,border-color .2s,color .2s,transform 160ms var(--ease-out)}
 #copyBtn.copied{background:#1f7a45;border-color:#1f7a45;color:#fff;animation:copyPop .35s var(--ease-out)}
@@ -883,7 +887,7 @@ const MENU=[
   {n:'4 perros + papas',d:'Promo de los lunes y martes',p:null,img:'gemelo',only:['barranquilla'],days:[1,2]},
   {n:'Combo chuzo + gemelo + salchipapa',d:'1 chuzo desgranado, 1 perro gemelo y 1 salchipapa sencilla',p:39999,img:'chuzo',only:['barranquilla']}]},
  {id:'perros',t:'Perros',em:'🌭',items:[
-  A('Perro Boss','Pan de perro, suiza asada, mermelada de tocineta, mozarella, maíz y cebolla crispy. Ganador del Festival del Perro 2025.',14000,PE,'boss'),
+  Object.assign(A('Perro Boss','Pan de perro, suiza asada, mermelada de tocineta, mozarella, maíz y cebolla crispy. Ganador del Festival del Perro 2025.',14000,PE,'boss'),{premio:'Festival del Perro 2025'}),
   A('Perro americano','Pan de perro, salchicha americana, tocineta'+PER,15000,PE,'ranchero'),
   A('Perro ranchero','Pan de perro, salchicha ranchera, tocineta'+PER,15000,PE,'ranchero'),
   A('Perro criollo','Pan de perro, salchicha ranchera, queso asado, tocineta'+PER,16000,PE,'criollo'),
@@ -939,7 +943,7 @@ const MENU=[
   A('Mini suizo','Suiza'+FRA,11000,P),
   A('Mini suizo gratinado','Suiza, queso mozarella gratinado'+FRA,11000,P),
   A('Súper suizo','Suiza'+FRA,16000,PE),
-  A('Suizo Champions','Suiza, pulled pork, queso frito, papas a la francesa, queso costeño, papa ripio y salsa tártara. Ganador del Festival del Suizo.',20000,PE,'champions'),
+  Object.assign(A('Suizo Champions','Suiza, pulled pork, queso frito, papas a la francesa, queso costeño, papa ripio y salsa tártara. Ganador del Festival del Suizo.',20000,PE,'champions'),{premio:'Festival del Suizo'}),
   A('Súper suizo gratinado','Suiza, queso gratinado'+FRA,18000,PE,'suizograt'),
   A('Suizo con chorizo y butifarra','Suiza, chorizo y butifarra'+FRA,17000,PE),
   A('Suizo con pollo','Suiza, pollo'+FRA,18000,PE),
@@ -1062,7 +1066,8 @@ function card(it){
   const ok=avail(it),dok=dayOk(it),dis=!ok||!dok,c=it.cat;
   const tags=(it.only&&!sede?`<span class="tag">Solo ${sedeNames(it.only)}</span>`:'')+(it.days?`<span class="tag tag-d">${dayTxt(it)}</span>`:'');
   const src=im(it.img);
-  return `<article class="item${dis?' off':''}"><div class="ph">${src?`<img src="${src}" alt="${esc(it.n)}" loading="lazy" width="104" height="104">`:`<span aria-hidden="true">${c.em}</span>`}</div><div class="tx"><h3>${it.n}</h3>${it.d?`<p>${it.d}</p>`:''}${tags?`<div class="tags">${tags}</div>`:''}<div class="row"><b${it.p==null?' class="pc"':''}>${it.o==='jugo'?'Desde ':''}${fp(it.p)}</b><button class="add" type="button" data-id="${it.id}"${dis?' disabled':''} aria-label="Agregar ${esc(it.n)}">${!ok?'No disponible':!dok?'Hoy no':'Agregar'}</button></div></div></article>`;
+  const premio=it.premio?`<span class="premio-tag" title="Ganador del ${it.premio}" aria-label="Ganador del ${it.premio}"><svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="9" r="6"/><path d="M8.5 14 7 22l5-3 5 3-1.5-8"/></svg>Ganador del festival</span>`:'';
+  return `<article class="item${dis?' off':''}${it.premio?' premio':''}"><div class="ph">${src?`<img src="${src}" alt="${esc(it.n)}" loading="lazy" width="104" height="104">`:`<span aria-hidden="true">${c.em}</span>`}</div><div class="tx">${premio}<h3>${it.n}</h3>${it.d?`<p>${it.d}</p>`:''}${tags?`<div class="tags">${tags}</div>`:''}<div class="row"><b${it.p==null?' class="pc"':''}>${it.o==='jugo'?'Desde ':''}${fp(it.p)}</b><button class="add" type="button" data-id="${it.id}"${dis?' disabled':''} aria-label="Agregar ${esc(it.n)}">${!ok?'No disponible':!dok?'Hoy no':'Agregar'}</button></div></div></article>`;
 }
 function renderMenu(){
   /* Con sede elegida solo se muestran sus productos y promociones; las categorías vacías se ocultan */

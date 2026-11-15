@@ -343,6 +343,18 @@ prueba('Promo de los miércoles: se puede pedir el miércoles y no el lunes', as
   igual(b.disabled, true); igual(b.textContent, 'Hoy no');
 });
 
+prueba('Los ganadores de festivales tienen su insignia (y solo ellos)', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  const ganadores = qa(w, '#menuRoot .item.premio');
+  igual(ganadores.map(c => c.querySelector('h3').textContent).join(' | '), 'Perro Boss | Suizo Champions');
+  ganadores.forEach(g => igual(g.querySelector('.premio-tag').textContent, 'Ganador del festival'));
+  igual(ganadores[0].querySelector('.premio-tag').getAttribute('aria-label'), 'Ganador del Festival del Perro 2025');
+  igual(ganadores[1].querySelector('.premio-tag').getAttribute('aria-label'), 'Ganador del Festival del Suizo');
+  ok(ganadores[0].querySelector('.premio-tag').getBoundingClientRect().height < 30, 'La insignia debe caber en una sola línea');
+  igual(qa(w, '#menuRoot .premio-tag').length, 2, 'Ningún otro producto debe tener insignia');
+  await agregar(w, 'Perro Boss');
+  ok(botonAgregar(w, 'Perro Boss').closest('.item').classList.contains('incart'), 'Al estar en el pedido se marca como los demás');
+});
 grupo('Agregar productos');
 prueba('Agregar sin sede: pide la sede y luego agrega el producto', async () => {
   const w = await abrir(); hora(w, ...ABIERTO);
