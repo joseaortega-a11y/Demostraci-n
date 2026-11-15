@@ -1,0 +1,515 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pruebas | La Troncal</title>
+<style>
+  body{font:15px/1.5 system-ui,sans-serif;margin:16px;background:#fff;color:#222}
+  #salida{white-space:pre-wrap;font:13px/1.5 ui-monospace,Consolas,monospace}
+  .ok{color:#17733a}.fallo{color:#b3261e;font-weight:600}
+  #marco iframe{border:1px solid #ccc}
+</style>
+</head>
+<body>
+<h1>Pruebas de La Troncal</h1>
+<p>Carga <code>../index.html</code> en un marco y la usa como un cliente. Ejecútalas con <code>tests\correr-pruebas.ps1</code>
+  (abrir este archivo con doble clic no funciona: el navegador bloquea el acceso al marco).</p>
+<pre id="salida"></pre>
+<div id="marco"></div>
+<script>
+/* ===================== Mini sistema de pruebas ===================== */
+const pruebas = [];
+const prueba = (nombre, fn) => pruebas.push({ nombre, fn });
+const S = v => JSON.stringify(v);
+function ok(c, msg) { if (!c) throw new Error(msg); }
+function igual(a, b, msg) { if (a !== b) throw new Error((msg ? msg + ': ' : '') + 'se esperaba ' + S(b) + ' y se obtuvo ' + S(a)); }
+function contiene(t, s, msg) { if (!String(t).includes(s)) throw new Error((msg ? msg + ': ' : '') + 'no aparece ' + S(s) + ' en ' + S(String(t).slice(0, 400))); }
+function noContiene(t, s, msg) { if (String(t).includes(s)) throw new Error((msg ? msg + ': ' : '') + 'no debería aparecer ' + S(s)); }
+
+const esperar = ms => new Promise(r => setTimeout(r, ms));
+const marco = document.getElementById('marco');
+
+function cargarIframe() {
+  return new Promise((res, rej) => {
+    const f = document.createElement('iframe');
+    f.width = 390; f.height = 800;
+    f.onload = () => {
+      try { f.contentWindow.document.body; res(f.contentWindow); }
+      catch (e) { rej(new Error('Sin acceso al marco. Ejecuta las pruebas con correr-pruebas.ps1')); }
+    };
+    f.src = new URLSearchParams(location.search).get('pagina') || '../index.html';
+    marco.replaceChildren(f);
+  });
+}
+/* Abre la página. Por defecto empieza sin pedido ni sede guardados. */
+async function abrir({ limpiar = true } = {}) {
+  if (limpiar) { try { localStorage.clear(); } catch (e) {} }
+  let w = await cargarIframe();
+  if (limpiar && w.localStorage.length) { w.localStorage.clear(); w = await cargarIframe(); }
+  w.__errores = [];
+  w.addEventListener('error', e => w.__errores.push(e.message));
+  w.open = u => { w.__abierto = u; return {}; };   // no abrir WhatsApp de verdad
+  return w;
+}
+
+/* ===================== Ayudas para usar la página ===================== */
+const q = (w, s) => w.document.querySelector(s);
+const qa = (w, s) => [...w.document.querySelectorAll(s)];
+/* Fija la hora de Colombia: d = 1 lunes … 7 domingo, m = minutos desde las 00:00 */
+const hora = (w, d, m) => w.eval(`now=function(){return {d:${d},m:${m}}}`);
+const ABIERTO = [3, 19 * 60];          // miércoles 7:00 pm: todas las sedes abiertas
+const elegirSede = (w, id) => { const b = q(w, `#sedeList [data-s="${id}"]`); ok(b, 'No existe la sede ' + id); b.click(); };
+const botonAgregar = (w, n) => qa(w, '#menuRoot .add').find(b => b.getAttribute('aria-label') === 'Agregar ' + n);
+const carrito = w => JSON.parse(JSON.stringify(w.eval('cart')));
+const textoCarta = w => q(w, '#menuRoot').textContent;
+
+async function agregar(w, nombre, { adiciones = {}, opcion } = {}) {
+  const b = botonAgregar(w, nombre);
+  ok(b, 'No está en la carta: ' + nombre);
+  ok(!b.disabled, nombre + ' aparece deshabilitado');
+  b.click();
+  if (!q(w, '#dOpt').open) return;
+  if (opcion) {
+    const lab = qa(w, '#optBody label.opt').find(l => l.textContent.includes(opcion));
+    ok(lab, 'Opción no encontrada: ' + opcion);
+    lab.querySelector('input').click();
+  }
+  for (const [a, k] of Object.entries(adiciones))
+    for (let i = 0; i < k; i++) {
+      const ob = qa(w, '#optBody [data-oq="1"]').find(x => x.getAttribute('aria-label') === 'Agregar ' + a);
+      ok(ob, 'Adición no encontrada: ' + a);
+      ob.click();
+    }
+  q(w, '#optBtn').click();
+  ok(!q(w, '#dOpt').open, 'La ventana de opciones no se cerró');
+}
+function abrirPedido(w) { q(w, '#bar').click(); ok(q(w, '#dCart').open, 'No se abrió el pedido'); }
+function llenar(w, { nom = 'Ana Pérez', ref = 'Barrio Centro', dir = '', recoger = false, pago, acepto = true } = {}) {
+  const F = q(w, '#fCart').elements;
+  F.nom.value = nom; F.ref.value = ref; F.dir.value = dir;
+  if (recoger) q(w, 'input[name=ent][value=rec]').click();
+  if (pago) { F.pago.value = pago; F.pago.dispatchEvent(new w.Event('change', { bubbles: true })); }
+  F.acepto.checked = acepto;
+}
+async function enviar(w) { q(w, '#fCart button[type=submit]').click(); await esperar(1300); }
+const mensaje = w => { ok(w.__abierto, 'No se abrió WhatsApp'); return decodeURIComponent(w.__abierto.split('?text=')[1]); };
+
+/* ===================== PRUEBAS ===================== */
+
+/* --- Carga --- */
+prueba('La página carga completa y sin errores', async () => {
+  const w = await abrir();
+  ok(q(w, '#barQ'), 'El último bloque del script no se ejecutó (falta #barQ)');
+  ok(qa(w, '#menuRoot .item').length > 100, 'La carta casi no tiene productos');
+  igual(qa(w, '#sedesRoot .sede').length, 4, 'Tarjetas de sedes');
+  igual(w.__errores.length, 0, 'Errores de JavaScript');
+});
+prueba('Al entrar se pide elegir la sede, con las 4 sedes', async () => {
+  const w = await abrir();
+  ok(q(w, '#dSede').open, 'La ventana de sedes no se abrió');
+  igual(q(w, '#tSede').textContent, '¿Dónde quieres pedir?');
+  igual(qa(w, '#sedeList [data-s]').map(b => b.dataset.s).join(','), 'lorica,express,monteria,barranquilla');
+});
+prueba('No se puede cerrar la ventana de sedes con Escape sin elegir sede', async () => {
+  const w = await abrir();
+  const ev = new w.Event('cancel', { cancelable: true });
+  q(w, '#dSede').dispatchEvent(ev);
+  ok(ev.defaultPrevented, 'Escape cerraría la ventana sin sede');
+});
+
+/* --- Utilidades --- */
+prueba('Formato de precios en pesos', async () => {
+  const w = await abrir();
+  igual(w.eval('fmt(14000)'), '$14.000');
+  igual(w.eval('fmt(8000)'), '$8.000');
+  igual(w.eval('fmt(150000)'), '$150.000');
+  igual(w.eval('fp(null)'), 'Por confirmar');
+});
+prueba('Listas, duraciones y horas en texto', async () => {
+  const w = await abrir();
+  igual(w.eval("lst(['a'])"), 'a');
+  igual(w.eval("lst(['a','b','c'])"), 'a, b y c');
+  igual(w.eval('dur(20)'), '20 min');
+  igual(w.eval('dur(90)'), '1 h 30 min');
+  igual(w.eval('dur(120)'), '2 h');
+  igual(w.eval('hm(1080)'), '6:00 pm');
+  igual(w.eval('hm(1440)'), '12:00 am');
+  igual(w.eval('hm(1410)'), '11:30 pm');
+});
+prueba('esc() neutraliza HTML', async () => {
+  const w = await abrir();
+  igual(w.eval(`esc('<b a="1">&')`), '&lt;b a=&quot;1&quot;>&amp;');
+});
+
+/* --- Horarios --- */
+prueba('Horario Lorica Principal: abre 6 pm, cierra 12 am (lun-jue) y 1 am (vie-dom)', async () => {
+  const w = await abrir();
+  const abierta = (d, m) => { hora(w, d, m); return w.eval('isOpen(SEDES[0])'); };
+  igual(abierta(1, 19 * 60), true, 'Lunes 7:00 pm');
+  igual(abierta(1, 17 * 60 + 59), false, 'Lunes 5:59 pm');
+  igual(abierta(2, 30), false, 'Martes 12:30 am (el lunes cierra a medianoche)');
+  igual(abierta(5, 30), false, 'Viernes 12:30 am (el jueves cierra a medianoche)');
+  igual(abierta(6, 30), true, 'Sábado 12:30 am (el viernes cierra a la 1 am)');
+  igual(abierta(1, 30), true, 'Lunes 12:30 am (el domingo cierra a la 1 am)');
+  igual(abierta(6, 60), false, 'Sábado 1:00 am en punto');
+});
+prueba('Horario Montería y Barranquilla', async () => {
+  const w = await abrir();
+  const abierta = (i, d, m) => { hora(w, d, m); return w.eval(`isOpen(SEDES[${i}])`); };
+  igual(abierta(2, 3, 23 * 60 + 29), true, 'Montería miércoles 11:29 pm');
+  igual(abierta(2, 3, 23 * 60 + 30), false, 'Montería miércoles 11:30 pm');
+  igual(abierta(3, 1, 17 * 60 + 45), true, 'Barranquilla lunes 5:45 pm (abre 5:30)');
+  igual(abierta(3, 5, 17 * 60 + 45), false, 'Barranquilla viernes 5:45 pm (abre 6:00)');
+});
+prueba('Aviso de cierre próximo y próxima apertura', async () => {
+  const w = await abrir();
+  hora(w, 1, 23 * 60 + 40);
+  const st = w.eval('sedeState(SEDES[0])');
+  igual(st.open, true); igual(st.soon, true, 'Faltan 20 min: debe avisar'); igual(st.mins, 20); igual(st.at, '12:00 am');
+  hora(w, 7, 23 * 60);
+  igual(w.eval('sedeState(SEDES[0]).soon'), false, 'Faltan 2 h: no debe avisar');
+  hora(w, 1, 10 * 60);
+  igual(w.eval('nextOpen(SEDES[0]).txt'), 'hoy a las 6:00 pm');
+  hora(w, 3, 23 * 60 + 45);
+  igual(w.eval('nextOpen(SEDES[2]).txt'), 'mañana a las 6:00 pm');
+});
+prueba('Franja de estado: "cierra en 20 min" y "está cerrada"', async () => {
+  const w = await abrir();
+  hora(w, 1, 23 * 60 + 40); elegirSede(w, 'lorica');
+  const b = q(w, '#sBanner');
+  ok(!b.hidden, 'La franja no aparece');
+  ok(b.classList.contains('soon'), 'Debería ser la franja de "cierra pronto"');
+  contiene(b.textContent, 'cierra en 20 min');
+  hora(w, 1, 10 * 60); w.eval('statusBar()');
+  ok(b.classList.contains('closed'), 'Debería ser la franja de "cerrada"');
+  contiene(b.textContent, 'está cerrada');
+  contiene(b.textContent, 'abre hoy a las 6:00 pm');
+  ok(b.querySelector('svg.mascot'), 'Falta la mascota durmiendo');
+  hora(w, ...ABIERTO); w.eval('statusBar()');
+  ok(b.hidden, 'Con la sede abierta la franja debe ocultarse');
+});
+
+/* --- Carta por sede --- */
+prueba('Sin sede: la carta muestra todo con etiquetas "Solo …"', async () => {
+  const w = await abrir();
+  contiene(textoCarta(w), 'Hamburguesa London');
+  contiene(textoCarta(w), 'Perro sencillo');
+  contiene(textoCarta(w), 'Solo Lorica Principal');
+  contiene(textoCarta(w), 'Solo Lorica Express');
+});
+prueba('Lorica Principal: solo sus productos', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  const t = textoCarta(w);
+  contiene(t, 'Perro sencillo'); contiene(t, 'Perro Boss'); contiene(t, 'Jugo natural');
+  noContiene(t, 'Hamburguesa London', 'Es solo de Express');
+  noContiene(t, 'Combo chuzo', 'Es solo de Barranquilla');
+  noContiene(t, 'Solo Lorica', 'Con sede elegida no van etiquetas de sede');
+  igual(q(w, '#sedeBtn').getAttribute('aria-label'), 'Sede: Lorica Principal. Cambiar sede');
+});
+prueba('Lorica Express: solo sus productos y sus adiciones', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'express');
+  const t = textoCarta(w);
+  contiene(t, 'Hamburguesa London'); contiene(t, 'Perro Boss');
+  noContiene(t, 'Perro sencillo'); noContiene(t, 'Jugo natural');
+  botonAgregar(w, 'Perro Boss').click();
+  const ops = q(w, '#optBody').textContent;
+  contiene(ops, 'Bollo', 'Adición propia de Express');
+  noContiene(ops, 'Encebollado', 'Adición de la sede principal');
+});
+prueba('Montería: sin carta, muestra el botón de WhatsApp y su promoción', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'monteria');
+  const nc = q(w, '.nocarta');
+  ok(nc, 'Falta el aviso de "carta muy pronto"');
+  igual(nc.querySelector('a.wa').getAttribute('href'), 'https://wa.me/573207829292');
+  igual(qa(w, '#menuRoot .item').length, 1, 'Solo debería estar la promo de los miércoles');
+  contiene(textoCarta(w), '4 perros por $20.000');
+});
+prueba('Barranquilla: solo sus promociones', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'barranquilla');
+  const t = textoCarta(w);
+  contiene(t, 'Combo chuzo + gemelo + salchipapa'); contiene(t, '4 perros + papas');
+  noContiene(t, '4 perros por $20.000');
+});
+prueba('Promo de los miércoles: se puede pedir el miércoles y no el lunes', async () => {
+  let w = await abrir(); hora(w, 3, 19 * 60); elegirSede(w, 'lorica');
+  let b = botonAgregar(w, '4 perros por $20.000');
+  igual(b.disabled, false); igual(b.textContent, 'Agregar');
+  w = await abrir(); hora(w, 1, 19 * 60); elegirSede(w, 'lorica');
+  b = botonAgregar(w, '4 perros por $20.000');
+  igual(b.disabled, true); igual(b.textContent, 'Hoy no');
+});
+
+/* --- Agregar productos --- */
+prueba('Agregar sin sede: pide la sede y luego agrega el producto', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO);
+  q(w, '#dSede').close();
+  botonAgregar(w, 'Soda de fresa').click();
+  ok(q(w, '#dSede').open, 'Debió pedir la sede');
+  igual(carrito(w).length, 0);
+  elegirSede(w, 'lorica');
+  igual(carrito(w).length, 1, 'El producto se debió agregar al elegir la sede');
+  igual(carrito(w)[0].n, 'Soda de fresa');
+});
+prueba('Producto simple: se suma a la misma línea y actualiza el botón "Ver pedido"', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  ok(q(w, '#bar').hidden, 'Sin pedido el botón debe estar oculto');
+  await agregar(w, 'Soda de fresa');
+  await agregar(w, 'Soda de fresa');
+  const c = carrito(w);
+  igual(c.length, 1); igual(c[0].q, 2); igual(c[0].u, 8000);
+  ok(!q(w, '#bar').hidden, 'El botón debe aparecer');
+  igual(q(w, '#barQ').textContent, '2');
+  igual(q(w, '#barT').textContent, '$16.000');
+  contiene(q(w, '#barN').textContent, '2 productos');
+});
+prueba('Plato con adiciones: el precio del botón y el pedido suman bien', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  botonAgregar(w, 'Perro Boss').click();
+  ok(q(w, '#dOpt').open, 'No se abrieron las opciones');
+  igual(q(w, '#optBtn').textContent, 'Agregar · $14.000');
+  const mas = a => qa(w, '#optBody [data-oq="1"]').find(x => x.getAttribute('aria-label') === 'Agregar ' + a).click();
+  mas('Tocineta'); mas('Tocineta');
+  igual(q(w, '#optBtn').textContent, 'Agregar · $18.000');
+  mas('Salsa de piña');
+  igual(q(w, '#optBtn').textContent, 'Agregar · $18.000 + por confirmar');
+  q(w, '#optBtn').click();
+  const c = carrito(w);
+  igual(c.length, 3, 'Plato + tocineta + salsa');
+  const p = c.find(l => !l.par);
+  igual(c.filter(l => l.par === p.id).length, 2, 'Las adiciones deben ir unidas al plato');
+  igual(w.eval('total()'), 18000);
+  igual(w.eval('tbd()'), true, 'La salsa no tiene precio');
+  igual(q(w, '#barT').textContent, '$18.000*');
+});
+prueba('El mismo plato con adiciones distintas va en líneas separadas (#1, #2)', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Perro Boss', { adiciones: { Tocineta: 1 } });
+  await agregar(w, 'Perro Boss', { adiciones: { Chorizo: 1 } });
+  igual(carrito(w).filter(l => !l.par).length, 2);
+  abrirPedido(w);
+  const t = q(w, '#cartBody').textContent;
+  contiene(t, '#1'); contiene(t, '#2');
+});
+prueba('Jugo natural: el precio cambia según la opción', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  botonAgregar(w, 'Jugo natural').click();
+  igual(q(w, '#optBtn').textContent, 'Agregar · $8.000');
+  qa(w, '#optBody label.opt').find(l => l.textContent.includes('Milo en leche')).querySelector('input').click();
+  igual(q(w, '#optBtn').textContent, 'Agregar · $9.000');
+  q(w, '#optBtn').click();
+  const l = carrito(w)[0];
+  igual(l.u, 9000); igual(l.opt, 'En leche · Milo');
+});
+
+/* --- Carrito --- */
+prueba('Botones + y − del pedido; al llegar a 0 se borra con sus adiciones', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Perro Boss', { adiciones: { Tocineta: 1 } });
+  abrirPedido(w);
+  const id = carrito(w).find(l => !l.par).id;
+  q(w, `[data-k="${id}"][data-d="1"]`).click();
+  igual(carrito(w).find(l => l.id === id).q, 2);
+  igual(w.eval('total()'), 30000, '2 × 14.000 + 2.000');
+  q(w, `[data-k="${id}"][data-d="-1"]`).click();
+  q(w, `[data-k="${id}"][data-d="-1"]`).click();
+  igual(carrito(w).length, 0, 'La tocineta debió borrarse con el plato');
+  ok(!q(w, '#dCart').open, 'El pedido vacío debe cerrarse');
+  ok(q(w, '#bar').hidden, 'El botón "Ver pedido" debe ocultarse');
+});
+prueba('Cantidad máxima por línea: 20', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa');
+  abrirPedido(w);
+  const id = carrito(w)[0].id;
+  for (let i = 0; i < 25; i++) q(w, `[data-k="${id}"][data-d="1"]`).click();
+  igual(carrito(w)[0].q, 20);
+});
+prueba('La nota de un producto no permite meter HTML', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa');
+  abrirPedido(w);
+  const ataque = '"><img src=x id=hack>';
+  const inp = q(w, '#cartBody input.ln');
+  inp.value = ataque; inp.dispatchEvent(new w.Event('input', { bubbles: true }));
+  igual(carrito(w)[0].nt, ataque);
+  w.eval('cartHtml()');
+  ok(!q(w, '#hack'), 'El HTML de la nota se ejecutó en la página');
+  igual(q(w, '#cartBody input.ln').value, ataque);
+});
+prueba('Cambiar de sede quita lo que la nueva sede no tiene', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Perro sencillo', { adiciones: { Tocineta: 1 } });
+  await agregar(w, 'Perro Boss');
+  elegirSede(w, 'express');
+  const c = carrito(w);
+  igual(c.map(l => l.n).join(','), 'Perro Boss', 'Solo debe quedar el Perro Boss');
+  contiene(q(w, '#toast').textContent, 'Quitamos Perro sencillo');
+});
+prueba('El pedido y la sede se guardan al recargar la página', async () => {
+  let w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa');
+  w = await abrir({ limpiar: false });
+  igual(w.eval('sede'), 'lorica');
+  igual(carrito(w).length, 1);
+  igual(q(w, '#tSede').textContent, '¿Pides en la misma sede?');
+  ok(!q(w, '#bar').hidden, 'El botón "Ver pedido" debe verse');
+});
+prueba('Datos guardados dañados no rompen la página', async () => {
+  let w = await abrir();
+  w.localStorage.setItem('tb_cart2', '{dañado');
+  w.localStorage.setItem('tb_sede', 'no-existe');
+  w = await abrir({ limpiar: false });
+  igual(w.eval('sede'), null);
+  igual(carrito(w).length, 0);
+  ok(qa(w, '#menuRoot .item').length > 100, 'La carta no se mostró');
+  w.localStorage.setItem('tb_cart2', '[{"id":"a","n":"X","q":0},null,{"id":"b","n":"Y","q":1,"u":1000}]');
+  w = await abrir({ limpiar: false });
+  igual(carrito(w).map(l => l.n).join(','), 'Y', 'Debe descartar líneas inválidas');
+});
+
+/* --- Formulario del pedido --- */
+prueba('Validaciones: nombre, dirección y aceptar la política', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa');
+  abrirPedido(w);
+  const err = () => q(w, '#err').textContent;
+  llenar(w, { nom: '', ref: '', acepto: false }); await enviar(w);
+  contiene(err(), 'Escribe tu nombre');
+  llenar(w, { ref: '', acepto: false }); await enviar(w);
+  contiene(err(), 'Escribe tu barrio');
+  llenar(w, { acepto: false }); await enviar(w);
+  contiene(err(), 'acepta la política');
+  ok(!w.__abierto, 'No debió abrir WhatsApp');
+});
+prueba('Recoger en la sede no pide dirección', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa');
+  abrirPedido(w);
+  llenar(w, { ref: '', recoger: true });
+  ok(q(w, '#refW').hidden && q(w, '#dirW').hidden, 'Los campos de dirección deben ocultarse');
+  await enviar(w);
+  contiene(mensaje(w), '*RECOGER EN LA SEDE*');
+  noContiene(mensaje(w), 'Domicilio: por confirmar');
+});
+prueba('Datáfono: solo aparece al recoger y solo en sedes que lo tienen', async () => {
+  let w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w);
+  const opciones = () => qa(w, '[name=pago] option').map(o => o.value).join(',');
+  igual(opciones(), 'Efectivo,Transferencia', 'Con domicilio');
+  q(w, 'input[name=ent][value=rec]').click();
+  igual(opciones(), 'Efectivo,Transferencia,Datáfono', 'Al recoger');
+  w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'express');
+  await agregar(w, 'Perro Boss'); abrirPedido(w);
+  q(w, 'input[name=ent][value=rec]').click();
+  igual(opciones(), 'Efectivo,Transferencia', 'Express no tiene datáfono');
+});
+prueba('Envío completo: el mensaje de WhatsApp lleva todo el pedido', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Perro Boss', { adiciones: { Tocineta: 1 } });
+  await agregar(w, 'Soda de fresa'); await agregar(w, 'Soda de fresa');
+  abrirPedido(w);
+  const nota = q(w, '#cartBody input.ln');
+  nota.value = 'sin cebolla'; nota.dispatchEvent(new w.Event('input', { bubbles: true }));
+  llenar(w, { nom: '  Ana Pérez ', ref: 'Barrio Centro', dir: 'Calle 1 #2-3', pago: 'Transferencia' });
+  q(w, '#fCart [name=nota]').value = 'Tocar el timbre';
+  await enviar(w);
+  ok(w.__abierto.startsWith('https://wa.me/573196938548?text='), 'Número de WhatsApp de Lorica Principal');
+  const m = mensaje(w);
+  [ '*PEDIDO LA TRONCAL – LORICA PRINCIPAL*', '*DOMICILIO*',
+    '1× Perro Boss – $14.000', '   _Adiciones de Perro Boss:_', '   + 1× Tocineta – $2.000', '   Nota: sin cebolla',
+    '2× Soda de fresa – $16.000', 'Subtotal: $32.000', 'Domicilio: por confirmar (según el barrio)',
+    '*Total: $32.000 + domicilio*', 'Nombre: Ana Pérez\n', 'Dirección: Calle 1 #2-3', 'Barrio y referencias: Barrio Centro',
+    'Notas generales: Tocar el timbre', '*Pago:* Transferencia', 'Acepto la política de tratamiento de datos'
+  ].forEach(s => contiene(m, s, 'Mensaje'));
+  ok(/Código: TB-\d{4} · /.test(m), 'Falta el código del pedido');
+  noContiene(m, 'sede cerrada');
+  ok(!q(w, '#fallback').hidden, 'Deben verse las opciones por si WhatsApp no abrió');
+  ok(!q(w, '#paidBox').hidden, 'Con transferencia debe verse "Enviar comprobante"');
+  contiene(decodeURIComponent(q(w, '#paidBtn').href), 'Ya pagué el pedido TB-');
+  igual(q(w, '#waLink').href, w.__abierto);
+  igual(w.__errores.length, 0, 'Errores de JavaScript');
+});
+prueba('Pago en efectivo no muestra "Enviar comprobante"', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w);
+  llenar(w, { pago: 'Efectivo' });
+  ok(q(w, '#qrBox').hidden, 'El cuadro de transferencia debe ocultarse');
+  await enviar(w);
+  contiene(mensaje(w), '*Pago:* Efectivo');
+  ok(q(w, '#paidBox').hidden);
+});
+prueba('Sede cerrada: pide confirmar y avisa en el mensaje', async () => {
+  const w = await abrir(); hora(w, 1, 10 * 60); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w);
+  llenar(w);
+  await enviar(w);
+  ok(!q(w, '#closedBox').hidden, 'Debe preguntar si enviar con la sede cerrada');
+  ok(!w.__abierto, 'No debe enviar sin confirmar');
+  contiene(q(w, '#closedTxt').textContent, 'hoy a las 6:00 pm');
+  q(w, '#closedGo').click(); await esperar(1300);
+  contiene(mensaje(w), '⚠️ Envié el pedido con la sede cerrada; lo pueden atender cuando abra (hoy a las 6:00 pm).');
+});
+prueba('Un producto que ya no está disponible hoy bloquea el envío', async () => {
+  const w = await abrir(); hora(w, 3, 19 * 60); elegirSede(w, 'lorica');
+  await agregar(w, '4 perros por $20.000');
+  hora(w, 4, 19 * 60);   // pasa al jueves con el pedido abierto
+  abrirPedido(w);
+  contiene(q(w, '#cartBody').textContent, 'No disponible hoy');
+  llenar(w); await enviar(w);
+  contiene(q(w, '#err').textContent, 'no está disponible hoy');
+  ok(!w.__abierto, 'No debió enviar');
+});
+
+/* --- Navegación y sedes --- */
+prueba('Pestañas Carta, Nosotros y Sedes', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  const cambiar = h => { w.location.hash = h; w.eval('route()'); };
+  cambiar('sedes');
+  igual(w.document.title, 'Sedes | La Troncal');
+  ok(!q(w, '[data-view=sedes]').hidden && q(w, '#menu').hidden, 'Debe verse solo la vista de sedes');
+  cambiar('nosotros');
+  igual(w.document.title, 'Nosotros | La Troncal');
+  cambiar('');
+  igual(w.document.title, 'Carta | La Troncal');
+  ok(!q(w, '#menu').hidden);
+});
+prueba('Tarjetas de sedes: WhatsApp, mapa, pagos y estado', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); w.eval('renderSedes()');
+  const t = qa(w, '#sedesRoot .sede');
+  const wa = t.map(s => s.querySelector('a.wa').getAttribute('href'));
+  igual(wa.join(' '), 'https://wa.me/573196938548 https://wa.me/573045922919 https://wa.me/573207829292 https://wa.me/573044851441');
+  t.forEach(s => { const m = s.querySelector('a.ghost').getAttribute('href'); ok(m.startsWith('https://maps.app.goo.gl/') || m.startsWith('https://www.google.com/maps/search/'), 'Enlace de mapa raro: ' + m); });
+  contiene(t[0].textContent, 'Pagos: efectivo, transferencia y datáfono');
+  t.forEach(s => contiene(s.textContent, 'Abierto ahora'));
+  hora(w, 1, 10 * 60); w.eval('renderSedes()');
+  qa(w, '#sedesRoot .sede').forEach(s => contiene(s.textContent, 'Cerrado ahora'));
+});
+prueba('Todos los productos tienen precio válido e imagen existente', async () => {
+  const w = await abrir();
+  const malos = w.eval(`Object.values(ITEMS).filter(i=>!(i.p===null||(Number.isInteger(i.p)&&i.p>0))||(i.img&&!IMGS[i.img])||(i.only&&i.only.some(s=>!SEDES.some(x=>x.id===s)))).map(i=>i.n)`);
+  igual(malos.length, 0, 'Productos con datos raros: ' + malos.join(', '));
+});
+
+/* ===================== Ejecución ===================== */
+(async () => {
+  const out = document.getElementById('salida');
+  const linea = (t, c) => { const s = document.createElement('span'); if (c) s.className = c; s.textContent = t + '\n'; out.appendChild(s); };
+  linea('===INICIO===');
+  let bien = 0;
+  for (const p of pruebas) {
+    try {
+      await Promise.race([p.fn(), esperar(20000).then(() => { throw new Error('Tardó demasiado'); })]);
+      bien++; linea('OK     ' + p.nombre, 'ok');
+    } catch (e) {
+      linea('FALLO  ' + p.nombre + '\n         → ' + e.message, 'fallo');
+    }
+  }
+  marco.replaceChildren();
+  linea(`RESUMEN: ${bien} de ${pruebas.length} pruebas pasaron`);
+  linea('===FIN===');
+  document.title = bien === pruebas.length ? 'Pruebas OK' : 'Pruebas con fallos';
+})();
+</script>
+</body>
+</html>
