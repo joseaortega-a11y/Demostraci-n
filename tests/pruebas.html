@@ -4,23 +4,125 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Pruebas | La Troncal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=DM+Sans:wght@400;600;700&display=swap">
 <style>
-  body{font:15px/1.5 system-ui,sans-serif;margin:16px;background:#fff;color:#222}
-  #salida{white-space:pre-wrap;font:13px/1.5 ui-monospace,Consolas,monospace}
-  .ok{color:#17733a}.fallo{color:#b3261e;font-weight:600}
-  #marco iframe{border:1px solid #ccc}
+:root{
+  --bg:#fff6ea;--s:#fff;--s2:#f6e7d0;--t:#2b1710;--m:#7a6455;--l:rgba(43,23,16,.12);
+  --rojo:#d62b1f;--amarillo:#ffc233;--verde:#1f7a45;--rojoS:#fdebe8;--cafe:#2b1710;
+  --f:"DM Sans",system-ui,sans-serif;--h:"Anton",Impact,"Arial Narrow",sans-serif;--mono:ui-monospace,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:15px/1.5 var(--f);-webkit-font-smoothing:antialiased}
+button{font:inherit;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto}
+
+/* Encabezado */
+.top{background:var(--cafe);color:#fff4e0;padding:28px 16px 34px;position:relative}
+.top::after{content:"";position:absolute;inset:auto 0 0;height:6px;background:repeating-linear-gradient(90deg,var(--amarillo) 0 28px,var(--rojo) 28px 56px)}
+.eyebrow{margin:0;color:var(--amarillo);font-weight:700;letter-spacing:.14em;text-transform:uppercase;font-size:.78rem}
+h1{margin:2px 0 6px;font:400 clamp(2.2rem,6vw,3.4rem)/1 var(--h);text-transform:uppercase;letter-spacing:.01em}
+.sub{margin:0;color:#d9c9b4;max-width:62ch}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:22px 0 14px}
+.stat{background:rgba(255,244,224,.07);border:1px solid rgba(255,244,224,.12);border-radius:16px;padding:12px 14px}
+.stat small{display:block;color:#bdb0a0;font-size:.78rem;font-weight:600;text-transform:uppercase;letter-spacing:.08em}
+.stat b{font:400 2rem/1.15 var(--h);font-variant-numeric:tabular-nums}
+.stat.v b{color:#7fdc9f}.stat.r b{color:#ff8f7a}
+.prog{height:8px;background:rgba(255,244,224,.12);border-radius:99px;overflow:hidden}
+.prog i{display:block;height:100%;width:0;background:var(--amarillo);border-radius:inherit;transition:width .25s ease,background-color .3s}
+.prog.ok i{background:#4cc77a}.prog.mal i{background:#ff6b57}
+
+/* Barra de acciones */
+.tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:22px 0 16px;padding:0 16px}
+.estado{display:inline-flex;align-items:center;gap:10px;font-weight:700;margin-right:auto}
+.estado .pt{width:10px;height:10px;border-radius:50%;background:var(--amarillo);box-shadow:0 0 0 4px rgba(255,194,51,.3)}
+.estado.ok .pt{background:var(--verde);box-shadow:0 0 0 4px rgba(31,122,69,.18)}
+.estado.mal .pt{background:var(--rojo);box-shadow:0 0 0 4px rgba(214,43,31,.18)}
+.btn{border:0;border-radius:99px;padding:10px 20px;min-height:44px;font-weight:700;background:var(--rojo);color:#fff;transition:transform .15s,opacity .15s}
+.btn:active{transform:scale(.97)}.btn:disabled{opacity:.45;cursor:default}
+.chip{border:1px solid var(--l);background:var(--s);color:var(--t);border-radius:99px;padding:9px 16px;min-height:44px;font-weight:600}
+.chip[aria-pressed=true]{background:var(--t);color:#fff4e0;border-color:var(--t)}
+
+/* Lista de pruebas */
+.main{display:grid;gap:24px;padding:0 16px 40px}
+.grupos{display:grid;gap:14px;align-content:start}
+.grupo{background:var(--s);border:1px solid var(--l);border-radius:20px;overflow:hidden;box-shadow:0 4px 18px rgba(43,23,16,.05)}
+.grupo h2{display:flex;justify-content:space-between;align-items:baseline;gap:12px;margin:0;padding:14px 18px;background:var(--s2);font:400 1.25rem var(--h);text-transform:uppercase;letter-spacing:.02em}
+.cuenta{font:600 .85rem var(--f);color:var(--m);text-transform:none;letter-spacing:0;white-space:nowrap}
+.cuenta.todo{color:var(--verde)}.cuenta.algo{color:var(--rojo)}
+.fila{display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:start;padding:11px 18px;border-top:1px solid var(--l);transition:background-color .2s}
+.grupo h2+.fila{border-top:0}
+.fila .n{padding-top:2px}
+.fila .ms{color:var(--m);font-size:.82rem;font-variant-numeric:tabular-nums;padding-top:3px}
+.fila.corre{background:#fff9ea}
+.fila.fallo{background:var(--rojoS)}
+.det{grid-column:2/-1;margin:2px 0 0;padding:8px 12px;border-radius:10px;background:#fff;border:1px solid rgba(214,43,31,.25);color:#8f1d14;font:13px/1.45 var(--mono);white-space:pre-wrap;word-break:break-word}
+.solo-fallos .fila:not(.fallo),.solo-fallos .grupo:not(:has(.fallo)){display:none}
+.ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;font-size:.8rem;font-weight:700;border:2px solid var(--l);color:transparent}
+.ic.corre{border-color:var(--amarillo);border-top-color:transparent;animation:gira .7s linear infinite}
+.ic.ok{background:var(--verde);border-color:var(--verde);color:#fff}
+.ic.fallo{background:var(--rojo);border-color:var(--rojo);color:#fff}
+@keyframes gira{to{transform:rotate(360deg)}}
+
+/* Celular con la página en vivo (en pantallas angostas queda fuera de la vista, pero se sigue dibujando para que las pruebas midan bien) */
+.vivo{position:absolute;left:-10000px;top:0}
+.tel{width:330px;margin:0 auto;padding:12px;background:#1a110c;border-radius:42px;box-shadow:0 20px 50px rgba(43,23,16,.28)}
+.pantalla{width:306px;height:628px;border-radius:30px;overflow:hidden;background:var(--s2);position:relative}
+#marco iframe{width:390px;height:800px;border:0;transform:scale(.7846);transform-origin:0 0;display:block}
+.vacio{position:absolute;inset:0;display:grid;place-items:center;text-align:center;padding:24px;color:var(--m);font-weight:600}
+.vacio[hidden]{display:none}
+.vacio b{display:block;font:400 2.4rem var(--h);color:var(--t);text-transform:uppercase}
+.cap{margin:14px auto 0;max-width:330px;text-align:center;color:var(--m);font-size:.88rem;min-height:2.6em}
+.cap b{color:var(--t)}
+.nota{font-size:.85rem;color:var(--m);margin:0 16px 32px;text-align:center}
+.nota code{font-family:var(--mono);background:var(--s2);padding:1px 6px;border-radius:6px}
+#salida{display:none}
+
+@media (min-width:900px){
+  .main{grid-template-columns:1fr 354px;align-items:start}
+  .vivo{position:sticky;left:auto;top:20px}
+}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}.fila{padding:11px 14px}}
+@media (prefers-reduced-motion:reduce){.ic.corre{animation:none}.prog i,.fila{transition:none}}
 </style>
 </head>
 <body>
-<h1>Pruebas de La Troncal</h1>
-<p>Carga <code>../index.html</code> en un marco y la usa como un cliente. Ejecútalas con <code>tests\correr-pruebas.ps1</code>
-  (abrir este archivo con doble clic no funciona: el navegador bloquea el acceso al marco).</p>
+<header class="top">
+  <div class="wrap">
+    <p class="eyebrow">La Troncal · control de calidad</p>
+    <h1>Pruebas de la página</h1>
+    <p class="sub">Cada prueba abre la página en un celular de prueba y la usa como un cliente: elige sede, arma el pedido y lo envía por WhatsApp.</p>
+    <div class="stats">
+      <div class="stat"><small>Pruebas</small><b id="nTotal">0</b></div>
+      <div class="stat v"><small>Pasaron</small><b id="nOk">0</b></div>
+      <div class="stat r"><small>Fallaron</small><b id="nMal">0</b></div>
+      <div class="stat"><small>Tiempo</small><b id="nTiempo">0 s</b></div>
+    </div>
+    <div class="prog" id="prog" role="progressbar" aria-label="Avance de las pruebas" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="tools">
+    <span class="estado" id="estado" role="status"><i class="pt"></i><span id="estadoTx">Preparando…</span></span>
+    <button class="chip" id="soloFallos" type="button" aria-pressed="false">Ver solo fallos</button>
+    <button class="btn" id="otraVez" type="button" disabled>Volver a correr</button>
+  </div>
+  <div class="main">
+    <div class="grupos" id="grupos"></div>
+    <aside class="vivo" aria-label="Página en vivo">
+      <div class="tel"><div class="pantalla"><div id="marco"></div><div class="vacio" id="vacio"><span><b>Listo</b>Aquí se ve la página mientras corren las pruebas.</span></div></div></div>
+      <p class="cap" id="cap"></p>
+    </aside>
+  </div>
+  <p class="nota">Ábrela con <code>tests\ver-pruebas.ps1</code> o córrela sin ventana con <code>tests\correr-pruebas.ps1</code>. Con doble clic no funciona: el navegador bloquea el acceso a la página.</p>
+</div>
 <pre id="salida"></pre>
-<div id="marco"></div>
 <script>
 /* ===================== Mini sistema de pruebas ===================== */
 const pruebas = [];
-const prueba = (nombre, fn) => pruebas.push({ nombre, fn });
+let grupoActual = 'General';
+const grupo = n => { grupoActual = n; };
+const prueba = (nombre, fn) => pruebas.push({ nombre, fn, grupo: grupoActual });
 const S = v => JSON.stringify(v);
 function ok(c, msg) { if (!c) throw new Error(msg); }
 function igual(a, b, msg) { if (a !== b) throw new Error((msg ? msg + ': ' : '') + 'se esperaba ' + S(b) + ' y se obtuvo ' + S(a)); }
@@ -63,6 +165,7 @@ const elegirSede = (w, id) => { const b = q(w, `#sedeList [data-s="${id}"]`); ok
 const botonAgregar = (w, n) => qa(w, '#menuRoot .add').find(b => b.getAttribute('aria-label') === 'Agregar ' + n);
 const carrito = w => JSON.parse(JSON.stringify(w.eval('cart')));
 const textoCarta = w => q(w, '#menuRoot').textContent;
+const seVe = el => el.getClientRects().length > 0;
 
 async function agregar(w, nombre, { adiciones = {}, opcion } = {}) {
   const b = botonAgregar(w, nombre);
@@ -97,7 +200,7 @@ const mensaje = w => { ok(w.__abierto, 'No se abrió WhatsApp'); return decodeUR
 
 /* ===================== PRUEBAS ===================== */
 
-/* --- Carga --- */
+grupo('Carga');
 prueba('La página carga completa y sin errores', async () => {
   const w = await abrir();
   ok(q(w, '#barQ'), 'El último bloque del script no se ejecutó (falta #barQ)');
@@ -118,7 +221,7 @@ prueba('No se puede cerrar la ventana de sedes con Escape sin elegir sede', asyn
   ok(ev.defaultPrevented, 'Escape cerraría la ventana sin sede');
 });
 
-/* --- Utilidades --- */
+grupo('Utilidades');
 prueba('Formato de precios en pesos', async () => {
   const w = await abrir();
   igual(w.eval('fmt(14000)'), '$14.000');
@@ -142,7 +245,7 @@ prueba('esc() neutraliza HTML', async () => {
   igual(w.eval(`esc('<b a="1">&')`), '&lt;b a=&quot;1&quot;>&amp;');
 });
 
-/* --- Horarios --- */
+grupo('Horarios');
 prueba('Horario Lorica Principal: abre 6 pm, cierra 12 am (lun-jue) y 1 am (vie-dom)', async () => {
   const w = await abrir();
   const abierta = (d, m) => { hora(w, d, m); return w.eval('isOpen(SEDES[0])'); };
@@ -190,7 +293,7 @@ prueba('Franja de estado: "cierra en 20 min" y "está cerrada"', async () => {
   ok(b.hidden, 'Con la sede abierta la franja debe ocultarse');
 });
 
-/* --- Carta por sede --- */
+grupo('Carta por sede');
 prueba('Sin sede: la carta muestra todo con etiquetas "Solo …"', async () => {
   const w = await abrir();
   contiene(textoCarta(w), 'Hamburguesa London');
@@ -240,7 +343,7 @@ prueba('Promo de los miércoles: se puede pedir el miércoles y no el lunes', as
   igual(b.disabled, true); igual(b.textContent, 'Hoy no');
 });
 
-/* --- Agregar productos --- */
+grupo('Agregar productos');
 prueba('Agregar sin sede: pide la sede y luego agrega el producto', async () => {
   const w = await abrir(); hora(w, ...ABIERTO);
   q(w, '#dSede').close();
@@ -302,7 +405,7 @@ prueba('Jugo natural: el precio cambia según la opción', async () => {
   igual(l.u, 9000); igual(l.opt, 'En leche · Milo');
 });
 
-/* --- Carrito --- */
+grupo('Carrito');
 prueba('Botones + y − del pedido; al llegar a 0 se borra con sus adiciones', async () => {
   const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
   await agregar(w, 'Perro Boss', { adiciones: { Tocineta: 1 } });
@@ -368,7 +471,7 @@ prueba('Datos guardados dañados no rompen la página', async () => {
   igual(carrito(w).map(l => l.n).join(','), 'Y', 'Debe descartar líneas inválidas');
 });
 
-/* --- Formulario del pedido --- */
+grupo('Formulario del pedido');
 prueba('Validaciones: nombre, dirección y aceptar la política', async () => {
   const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
   await agregar(w, 'Soda de fresa');
@@ -439,6 +542,58 @@ prueba('Pago en efectivo no muestra "Enviar comprobante"', async () => {
   contiene(mensaje(w), '*Pago:* Efectivo');
   ok(q(w, '#paidBox').hidden);
 });
+prueba('Al enviar el pedido se vacía el carrito y se muestra la confirmación', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Perro Boss', { adiciones: { Tocineta: 1 } });
+  await agregar(w, 'Soda de fresa');
+  ok(qa(w, '#menuRoot .item.incart').length === 2, 'Las tarjetas deben marcar lo que hay en el pedido');
+  abrirPedido(w); llenar(w, { pago: 'Transferencia' });
+  await enviar(w);
+  const m = mensaje(w);
+  contiene(m, '1× Perro Boss – $14.000', 'El mensaje debe salir completo antes de vaciar');
+  igual(carrito(w).length, 0, 'El carrito debe quedar vacío');
+  igual(w.localStorage.getItem('tb_cart2'), '[]', 'El carrito guardado también');
+  ok(q(w, '#bar').hidden, 'El botón "Ver pedido" debe ocultarse');
+  igual(qa(w, '#menuRoot .item.incart').length, 0, 'Las tarjetas ya no deben marcar productos');
+  ok(q(w, '#dCart').open, 'La ventana sigue abierta con la confirmación');
+  const body = q(w, '#cartBody').textContent;
+  contiene(body, '¡Pedido enviado!');
+  contiene(body, m.match(/TB-\d{4}/)[0], 'Debe mostrar el código del pedido');
+  ok(!q(w, '#fallback').hidden && !q(w, '#paidBox').hidden, 'Siguen los botones de respaldo y de comprobante');
+  ok(!seVe(q(w, '#fCart [name=nom]')), 'El formulario se esconde');
+  ok(!seVe(q(w, '#fCart button[type=submit]')), 'El botón de enviar se esconde');
+  igual(w.lastMsg, m, '"Copiar pedido" debe seguir copiando el pedido enviado');
+  q(w, '#dCart [data-close]').click();
+  ok(!q(w, '#dCart').open, 'La ventana debió cerrarse');
+  /* Nota: Edge sin ventana a veces no entrega el evento "close" del diálogo, así que aquí
+     se comprueba lo importante: que al abrir el siguiente pedido todo esté limpio. */
+  await esperar(2700);   // el botón de enviar vuelve a su estado normal
+  await agregar(w, 'Soda de fresa');
+  abrirPedido(w);
+  noContiene(q(w, '#cartBody').textContent, '¡Pedido enviado!');
+  ok(!q(w, '#fCart').classList.contains('enviado'), 'El formulario debe volver a la normalidad');
+  ok(q(w, '#fallback').hidden && q(w, '#paidBox').hidden, 'Los botones de respaldo del pedido anterior deben esconderse');
+  ok(seVe(q(w, '#fCart [name=nom]')), 'El formulario vuelve a verse');
+  igual(q(w, '#fCart [name=nom]').value, 'Ana Pérez', 'El nombre se conserva para el siguiente pedido');
+  w.__abierto = null; await enviar(w);
+  contiene(mensaje(w), '1× Soda de fresa – $8.000');
+  noContiene(mensaje(w), 'Perro Boss', 'El segundo pedido no debe traer lo del primero');
+});
+prueba('Si recargan después de enviar, el carrito sigue vacío', async () => {
+  let w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w); llenar(w); await enviar(w);
+  w = await abrir({ limpiar: false });
+  igual(carrito(w).length, 0);
+  igual(w.eval('sede'), 'lorica', 'La sede sí se recuerda');
+  ok(q(w, '#bar').hidden);
+});
+prueba('Si falta un dato, no se envía ni se vacía el carrito', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w);
+  llenar(w, { acepto: false }); await enviar(w);
+  ok(!w.__abierto, 'No debió abrir WhatsApp');
+  igual(carrito(w).length, 1, 'El carrito debe seguir con el producto');
+});
 prueba('Sede cerrada: pide confirmar y avisa en el mensaje', async () => {
   const w = await abrir(); hora(w, 1, 10 * 60); elegirSede(w, 'lorica');
   await agregar(w, 'Soda de fresa'); abrirPedido(w);
@@ -461,7 +616,7 @@ prueba('Un producto que ya no está disponible hoy bloquea el envío', async () 
   ok(!w.__abierto, 'No debió enviar');
 });
 
-/* --- Navegación y sedes --- */
+grupo('Navegación y sedes');
 prueba('Pestañas Carta, Nosotros y Sedes', async () => {
   const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
   const cambiar = h => { w.location.hash = h; w.eval('route()'); };
@@ -492,24 +647,102 @@ prueba('Todos los productos tienen precio válido e imagen existente', async () 
 });
 
 /* ===================== Ejecución ===================== */
-(async () => {
-  const out = document.getElementById('salida');
-  const linea = (t, c) => { const s = document.createElement('span'); if (c) s.className = c; s.textContent = t + '\n'; out.appendChild(s); };
+const $id = id => document.getElementById(id);
+const tiempo = ms => ms < 1000 ? Math.round(ms) + ' ms' : (ms / 1000).toFixed(1) + ' s';
+function pintarLista() {
+  const cont = $id('grupos'); cont.replaceChildren();
+  const secciones = new Map();
+  pruebas.forEach(p => {
+    if (!secciones.has(p.grupo)) {
+      const g = document.createElement('section'); g.className = 'grupo';
+      const h = document.createElement('h2'), c = document.createElement('span');
+      h.append(p.grupo, c); c.className = 'cuenta'; g.appendChild(h); cont.appendChild(g);
+      secciones.set(p.grupo, { g, c });
+    }
+    const f = document.createElement('div'); f.className = 'fila';
+    f.innerHTML = '<i class="ic" aria-hidden="true"></i><span class="n"></span><span class="ms"></span>';
+    f.querySelector('.n').textContent = p.nombre;
+    secciones.get(p.grupo).g.appendChild(f);
+    p.fila = f; p.cuenta = secciones.get(p.grupo).c;
+  });
+  secciones.forEach((_, n) => contarGrupo(n));
+}
+function contarGrupo(n) {
+  const ps = pruebas.filter(p => p.grupo === n), hechas = ps.filter(p => p.estado).length, mal = ps.filter(p => p.estado === 'fallo').length;
+  const c = ps[0].cuenta;
+  c.textContent = mal ? `${mal} con fallo` : `${hechas} de ${ps.length}`;
+  c.className = 'cuenta' + (mal ? ' algo' : hechas === ps.length ? ' todo' : '');
+}
+function marcar(p, estado, ms, msg) {
+  p.estado = estado === 'corre' ? undefined : estado;
+  p.fila.className = 'fila ' + estado;
+  const ic = p.fila.querySelector('.ic');
+  ic.className = 'ic ' + estado; ic.textContent = estado === 'ok' ? '✓' : estado === 'fallo' ? '✕' : '';
+  p.fila.querySelector('.ms').textContent = ms != null ? tiempo(ms) : '';
+  if (msg) { const d = document.createElement('p'); d.className = 'det'; d.textContent = msg; p.fila.appendChild(d); }
+  contarGrupo(p.grupo);
+}
+
+let corriendo = false;
+/* La página de prueba hace scroll por dentro (scrollIntoView) y eso arrastra esta página.
+   Mientras corren las pruebas, solo se acepta el scroll que hace la persona. */
+let yPersona = 0, ultimoGesto = 0;
+['wheel', 'touchmove', 'keydown', 'mousedown'].forEach(ev => addEventListener(ev, () => { ultimoGesto = Date.now(); }, { passive: true }));
+addEventListener('scroll', () => {
+  if (!corriendo || Date.now() - ultimoGesto < 800) { yPersona = scrollY; return; }
+  if (scrollY !== yPersona) scrollTo(0, yPersona);
+}, { passive: true });
+async function correr() {
+  if (corriendo) return;
+  corriendo = true;
+  const out = $id('salida'), linea = t => out.append(t + '\n');
+  out.textContent = '';
+  pruebas.forEach(p => { p.estado = undefined; });
+  pintarLista();
+  const prog = $id('prog'), est = $id('estado');
+  prog.className = 'prog'; est.className = 'estado';
+  $id('otraVez').disabled = true; $id('vacio').hidden = true;
+  $id('nTotal').textContent = pruebas.length; $id('nOk').textContent = 0; $id('nMal').textContent = 0;
   linea('===INICIO===');
-  let bien = 0;
-  for (const p of pruebas) {
+  const t0 = performance.now();
+  let bien = 0, mal = 0;
+  const reloj = setInterval(() => { $id('nTiempo').textContent = tiempo(performance.now() - t0); }, 100);
+  for (const [i, p] of pruebas.entries()) {
+    $id('estadoTx').textContent = `Corriendo ${i + 1} de ${pruebas.length}…`;
+    $id('cap').replaceChildren('Ahora: ', Object.assign(document.createElement('b'), { textContent: p.nombre }));
+    marcar(p, 'corre');
+    const t = performance.now();
     try {
       await Promise.race([p.fn(), esperar(20000).then(() => { throw new Error('Tardó demasiado'); })]);
-      bien++; linea('OK     ' + p.nombre, 'ok');
+      bien++; marcar(p, 'ok', performance.now() - t); linea('OK     ' + p.nombre);
     } catch (e) {
-      linea('FALLO  ' + p.nombre + '\n         → ' + e.message, 'fallo');
+      mal++; marcar(p, 'fallo', performance.now() - t, e.message); linea('FALLO  ' + p.nombre + '\n         → ' + e.message);
     }
+    $id('nOk').textContent = bien; $id('nMal').textContent = mal;
+    const pct = Math.round((i + 1) / pruebas.length * 100);
+    prog.firstElementChild.style.width = pct + '%'; prog.setAttribute('aria-valuenow', pct);
   }
-  marco.replaceChildren();
+  clearInterval(reloj);
+  $id('nTiempo').textContent = tiempo(performance.now() - t0);
+  const todoBien = mal === 0;
+  marco.replaceChildren(); $id('cap').textContent = '';
+  $id('vacio').innerHTML = todoBien ? '<span><b>Todo bien</b>La página pasó todas las pruebas.</span>' : '<span><b>Hay fallos</b>Revisa las pruebas en rojo.</span>';
+  $id('vacio').hidden = false;
+  prog.classList.add(todoBien ? 'ok' : 'mal'); est.classList.add(todoBien ? 'ok' : 'mal');
+  $id('estadoTx').textContent = todoBien ? `Todo bien: pasaron las ${pruebas.length} pruebas` : `${mal} de ${pruebas.length} ${mal === 1 ? 'prueba falló' : 'pruebas fallaron'}`;
   linea(`RESUMEN: ${bien} de ${pruebas.length} pruebas pasaron`);
   linea('===FIN===');
-  document.title = bien === pruebas.length ? 'Pruebas OK' : 'Pruebas con fallos';
-})();
+  document.title = (todoBien ? '✓ ' : '✕ ') + 'Pruebas | La Troncal';
+  $id('otraVez').disabled = false;
+  corriendo = false;
+}
+$id('otraVez').addEventListener('click', correr);
+$id('soloFallos').addEventListener('click', e => {
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', on);
+  $id('grupos').classList.toggle('solo-fallos', on);
+});
+correr();
 </script>
 </body>
 </html>
