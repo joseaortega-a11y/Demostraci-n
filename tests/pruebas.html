@@ -347,10 +347,14 @@ prueba('Los ganadores de festivales tienen su insignia (y solo ellos)', async ()
   const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
   const ganadores = qa(w, '#menuRoot .item.premio');
   igual(ganadores.map(c => c.querySelector('h3').textContent).join(' | '), 'Perro Boss | Suizo Champions');
-  ganadores.forEach(g => igual(g.querySelector('.premio-tag').textContent, 'Ganador del festival'));
-  igual(ganadores[0].querySelector('.premio-tag').getAttribute('aria-label'), 'Ganador del Festival del Perro 2025');
-  igual(ganadores[1].querySelector('.premio-tag').getAttribute('aria-label'), 'Ganador del Festival del Suizo');
-  ok(ganadores[0].querySelector('.premio-tag').getBoundingClientRect().height < 30, 'La insignia debe caber en una sola línea');
+  igual(ganadores[0].querySelector('.premio-tag').textContent, 'Ganador del Festival del Perro 2025');
+  igual(ganadores[1].querySelector('.premio-tag').textContent, 'Ganador del Festival del Suizo');
+  ganadores.forEach(g => {
+    const t = g.querySelector('.premio-tag');
+    ok(t.getBoundingClientRect().height < 30, 'La etiqueta debe caber en una sola línea (celular de 390 px)');
+    const [r, gr, b] = w.getComputedStyle(t).color.match(/\d+/g).map(Number);
+    ok(gr > r && gr > b, 'La etiqueta debe ser verde');
+  });
   igual(qa(w, '#menuRoot .premio-tag').length, 2, 'Ningún otro producto debe tener insignia');
   await agregar(w, 'Perro Boss');
   ok(botonAgregar(w, 'Perro Boss').closest('.item').classList.contains('incart'), 'Al estar en el pedido se marca como los demás');
