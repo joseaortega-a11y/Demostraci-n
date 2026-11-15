@@ -546,6 +546,34 @@ prueba('Pago en efectivo no muestra "Enviar comprobante"', async () => {
   contiene(mensaje(w), '*Pago:* Efectivo');
   ok(q(w, '#paidBox').hidden);
 });
+prueba('"Copiar pedido" copia el mensaje y el botón se pone verde', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w); llenar(w); await enviar(w);
+  let copiado = null;
+  Object.defineProperty(w.navigator, 'clipboard', { configurable: true, value: { writeText: t => { copiado = t; return Promise.resolve(); } } });
+  const b = q(w, '#copyBtn');
+  b.style.transition = 'none';   // Edge sin ventana no avanza las transiciones; así se mide el color final
+  const fondo = w.getComputedStyle(b).backgroundColor;
+  b.click(); await esperar(400);
+  igual(copiado, mensaje(w), 'Debe copiar el mensaje del pedido');
+  ok(b.classList.contains('copied'), 'El botón debe marcarse como copiado');
+  igual(b.textContent, '✓ ¡Copiado!');
+  ok(w.getComputedStyle(b).backgroundColor !== fondo, 'El botón debe cambiar de color');
+  igual(q(w, '#err').textContent, '', 'No debe salir texto de error');
+  await esperar(2600);
+  ok(!b.classList.contains('copied'), 'Después de unos segundos vuelve a la normalidad');
+  igual(b.textContent, 'Copiar pedido');
+});
+prueba('"Copiar pedido" avisa en rojo si no se pudo copiar', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  await agregar(w, 'Soda de fresa'); abrirPedido(w); llenar(w); await enviar(w);
+  Object.defineProperty(w.navigator, 'clipboard', { configurable: true, value: { writeText: () => Promise.reject(new Error('sin permiso')) } });
+  const b = q(w, '#copyBtn');
+  b.click(); await esperar(400);
+  ok(b.classList.contains('copyfail') && !b.classList.contains('copied'), 'El botón debe marcar el fallo');
+  igual(b.textContent, 'No se pudo copiar');
+  contiene(q(w, '#err').textContent, 'No se pudo copiar el pedido');
+});
 prueba('Al enviar el pedido se vacía el carrito y se muestra la confirmación', async () => {
   const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
   await agregar(w, 'Perro Boss', { adiciones: { Tocineta: 1 } });

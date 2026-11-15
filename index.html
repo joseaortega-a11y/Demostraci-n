@@ -664,6 +664,13 @@ footer .soc a{border-color:rgba(255,255,255,.3);color:#fff}
 .sent-pasos ol{margin:0;padding:0 0 0 1.25em;display:grid;gap:8px;font-size:.93rem;line-height:1.4}
 .sent-pasos li::marker{font-weight:700;color:var(--o)}
 .sent-pie{margin:0 0 14px;font-size:.85rem;color:var(--m)}
+/* Confirmación de "Copiar pedido" */
+#copyBtn{min-width:9.5em;transition:background-color .2s,border-color .2s,color .2s,transform 160ms var(--ease-out)}
+#copyBtn.copied{background:#1f7a45;border-color:#1f7a45;color:#fff;animation:copyPop .35s var(--ease-out)}
+#copyBtn.copyfail{border-color:var(--err);color:var(--err);animation:copyNo .3s ease}
+@keyframes copyPop{40%{transform:scale(1.07)}}
+@keyframes copyNo{25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+@media(prefers-reduced-motion:reduce){#copyBtn.copied,#copyBtn.copyfail{animation:none}}
 </style>
 </head>
 <body>
@@ -1161,7 +1168,7 @@ function setSede(id){
 document.addEventListener('click',e=>{
   const t=e.target;
   if(t.closest('[data-priv]')){e.preventDefault();return $('#dPriv').showModal()}
-  if(t.closest('#copyBtn')){cp(window.lastMsg||'').then(()=>{$('#err').textContent='Pedido copiado. Pégalo en el chat de WhatsApp.'},()=>{$('#err').textContent='No se pudo copiar el pedido. Inténtalo de nuevo.'});return}
+  if(t.closest('#copyBtn')){cp(window.lastMsg||'').then(()=>copiado(true),()=>copiado(false));return}
   if(t.closest('[data-close]'))return t.closest('dialog').close();
   const oq=t.closest('[data-oq]');
   if(oq){const g=+oq.dataset.g,i=+oq.dataset.i,v=Math.max(0,Math.min(9,cur.q[g][i]+ +oq.dataset.oq));cur.q[g][i]=v;$('#oq'+g+'-'+i).textContent=v;oq.parentNode.firstElementChild.disabled=!v;optTotal();return}
@@ -1255,6 +1262,15 @@ $('#fCart').addEventListener('submit',e=>{
     $('#fallback').hidden=false;$('#paidBox').hidden=!tr;if(tr)$('#paidBtn').href=paid;inDlg($('#fallback'));
   });
 });
+/* "Copiar pedido": el botón se pone verde con ✓ (o rojo si falla) y vuelve a la normalidad en 2,5 s */
+function copiado(ok){
+  const b=$('#copyBtn');clearTimeout(b._t);
+  b.classList.remove('copied','copyfail');void b.offsetWidth;b.classList.add(ok?'copied':'copyfail');
+  b.textContent=ok?'✓ ¡Copiado!':'No se pudo copiar';
+  $('#err').textContent=ok?'':'No se pudo copiar el pedido. Inténtalo de nuevo.';
+  $('#live').textContent=ok?'Pedido copiado. Pégalo en el chat de WhatsApp.':'';
+  b._t=setTimeout(()=>{b.classList.remove('copied','copyfail');b.textContent='Copiar pedido'},2500);
+}
 /* Al enviar: se vacía el carrito y se muestra la confirmación (el mensaje queda en window.lastMsg para "Copiar pedido") */
 function pedidoEnviado(nm,s,tr,dom){
   cart=[];notice='';bar();
