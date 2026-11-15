@@ -363,10 +363,36 @@ prueba('Las fotos de los productos tienen esquinas redondeadas', async () => {
   const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
   const fotos = qa(w, '#menuRoot .item .ph img');
   ok(fotos.length > 20, 'Debería haber fotos en la carta');
-  const cuadradas = fotos.filter(i => parseFloat(w.getComputedStyle(i).borderTopLeftRadius) < 8);
-  igual(cuadradas.length, 0, 'Fotos con esquinas cuadradas');
+  const cuadradas = fotos.filter(i => { const c = w.getComputedStyle(i.parentElement); return !i.parentElement.classList.contains('ph-in') || parseFloat(c.borderTopLeftRadius) < 8 || c.overflow !== 'hidden'; });
+  igual(cuadradas.length, 0, 'Fotos con esquinas cuadradas o sin recorte');
   await agregar(w, 'Soda de fresa');
   ok(botonAgregar(w, 'Soda de fresa').closest('.item').querySelector('.qbadge'), 'El contador sobre la foto debe seguir apareciendo');
+});
+prueba('Todas las fotos tienen el mismo tamaño y quedan centradas junto al texto', async () => {
+  for (const ancho of [390, 1100]) {
+    const w = await abrir(); w.frameElement.style.width = ancho + 'px';
+    hora(w, ...ABIERTO); elegirSede(w, 'lorica'); await esperar(100);
+    const tarjetas = qa(w, '#menuRoot .item');
+    const tam = new Set(), malas = [];
+    tarjetas.forEach(t => {
+      const ph = t.querySelector('.ph').getBoundingClientRect(), tx = t.querySelector('.tx').getBoundingClientRect();
+      tam.add(Math.round(ph.width) + 'x' + Math.round(ph.height));
+      if (Math.abs((ph.top + ph.bottom) / 2 - (tx.top + tx.bottom) / 2) > 2) malas.push(t.querySelector('h3').textContent);
+      const img = t.querySelector('.ph-in img');
+      if (img) { const r = t.querySelector('.ph-in').getBoundingClientRect();
+        if (Math.round(r.width) !== Math.round(ph.width) || Math.round(r.height) !== Math.round(ph.height)) malas.push(t.querySelector('h3').textContent + ' (recorte)'); }
+    });
+    igual(tam.size, 1, `A ${ancho} px los recuadros de foto deben medir lo mismo (${[...tam].join(', ')})`);
+    igual(malas.length, 0, `A ${ancho} px, fotos no centradas: ${malas.slice(0, 5).join(', ')}`);
+  }
+});
+prueba('El encuadre especial solo usa fotos que existen', async () => {
+  const w = await abrir();
+  const malas = w.eval('Object.keys(ENCUADRE).filter(k=>!IMGS[k])');
+  igual(malas.length, 0, 'Encuadres de fotos que no existen: ' + malas.join(', '));
+  hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  const boss = botonAgregar(w, 'Perro Boss').closest('.item').querySelector('.ph-in img');
+  igual(w.getComputedStyle(boss).getPropertyValue('--z').trim(), '1.1', 'El Perro Boss usa su encuadre');
 });
 grupo('Agregar productos');
 prueba('Agregar sin sede: pide la sede y luego agrega el producto', async () => {
