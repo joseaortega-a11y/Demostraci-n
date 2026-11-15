@@ -355,6 +355,15 @@ prueba('Los ganadores de festivales tienen su insignia (y solo ellos)', async ()
   await agregar(w, 'Perro Boss');
   ok(botonAgregar(w, 'Perro Boss').closest('.item').classList.contains('incart'), 'Al estar en el pedido se marca como los demás');
 });
+prueba('Las fotos de los productos tienen esquinas redondeadas', async () => {
+  const w = await abrir(); hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+  const fotos = qa(w, '#menuRoot .item .ph img');
+  ok(fotos.length > 20, 'Debería haber fotos en la carta');
+  const cuadradas = fotos.filter(i => parseFloat(w.getComputedStyle(i).borderTopLeftRadius) < 8);
+  igual(cuadradas.length, 0, 'Fotos con esquinas cuadradas');
+  await agregar(w, 'Soda de fresa');
+  ok(botonAgregar(w, 'Soda de fresa').closest('.item').querySelector('.qbadge'), 'El contador sobre la foto debe seguir apareciendo');
+});
 grupo('Agregar productos');
 prueba('Agregar sin sede: pide la sede y luego agrega el producto', async () => {
   const w = await abrir(); hora(w, ...ABIERTO);
