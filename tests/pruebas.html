@@ -386,6 +386,28 @@ prueba('Todas las fotos tienen el mismo tamaño y quedan centradas junto al text
     igual(malas.length, 0, `A ${ancho} px, fotos no centradas: ${malas.slice(0, 5).join(', ')}`);
   }
 });
+prueba('"Los más pedidos" y "Nosotros": fotos del mismo tamaño, derechas y alineadas', async () => {
+  for (const ancho of [390, 1100]) {
+    const w = await abrir(); w.frameElement.style.width = ancho + 'px';
+    hora(w, ...ABIERTO); elegirSede(w, 'lorica');
+    const revisar = (sel, nombre, unaFila = true) => {
+      const imgs = qa(w, sel);
+      ok(imgs.length >= 3, `${nombre}: faltan fotos`);
+      const r = imgs.map(i => i.getBoundingClientRect());
+      igual(new Set(r.map(x => Math.round(x.width) + 'x' + Math.round(x.height))).size, 1, `${nombre} a ${ancho} px: tamaños distintos (${r.map((x, k) => x.width.toFixed(1) + 'x' + x.height.toFixed(1) + (imgs[k].classList.contains('swap') ? ' cambiando' : '')).join(', ')})`);
+      if (unaFila) igual(new Set(r.map(x => Math.round(x.top))).size, 1, `${nombre} a ${ancho} px: no están alineadas`);
+      imgs.forEach(i => igual(w.getComputedStyle(i).transform, 'none', `${nombre} a ${ancho} px: foto inclinada`));
+    };
+    revisar('.rail img', 'Los más pedidos');
+    w.location.hash = 'nosotros'; w.eval('route()');
+    /* Edge sin ventana no termina las animaciones de entrada; se apagan para medir el tamaño final */
+    const st = w.document.createElement('style'); st.textContent = '*{animation:none!important;transition:none!important}'; w.document.head.appendChild(st);
+    qa(w, '.nos-collage img.swap').forEach(i => i.classList.remove('swap'));
+    await esperar(100);
+    revisar('.nos-collage img', 'Nosotros');
+    revisar('.nos-cards img', 'Lo nuestro', false);   // en celular va en 2 filas
+  }
+});
 prueba('El encuadre especial solo usa fotos que existen', async () => {
   const w = await abrir();
   const malas = w.eval('Object.keys(ENCUADRE).filter(k=>!IMGS[k])');
